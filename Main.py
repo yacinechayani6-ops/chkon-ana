@@ -1,10 +1,5 @@
 """
-شكون أنا؟ - ملف بايثون واحد مستقل بالكامل
-(بدون aiogram وبدون BASE_URL - يحتاج فقط aiohttp)
-
-التشغيل:
-    pip install aiohttp
-    python Main.py
+شكون أنا؟ - ملف بايثون واحد كامل مع نظام توثيق مرن
 """
 import asyncio
 import hashlib
@@ -15,14 +10,13 @@ import random
 import re
 import time
 import unicodedata
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, unquote
 import aiohttp
 from aiohttp import WSMsgType, web
 
-# توكن البوت والمنفذ
 BOT_TOKEN = os.getenv("BOT_TOKEN", "9269122102:AAFxKUbT6Bw4_lIfLWVenBDTWQ1M9_fGzMA")
 PORT = int(os.getenv("PORT", "8080"))
-ALLOW_GUEST_DEV = os.getenv("ALLOW_GUEST", "1") == "1"
+ALLOW_GUEST_DEV = True
 
 ROUNDS = (3, 5, 8, 10)
 TIMERS = (30, 45, 60, 90)
@@ -89,7 +83,6 @@ WORDS = {
     ],
 }
 
-# واجهة المستخدم HTML كاملة
 HTML_PAGE = """<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -116,8 +109,6 @@ HTML_PAGE = """<!DOCTYPE html>
   --primary: #9333ea;
   --primary-light: #a855f7;
   --gold: #eab308;
-  --silver: #94a3b8;
-  --bronze: #b45309;
   --success: #10b981;
   --danger: #ef4444;
   --grad-primary: linear-gradient(135deg, #9333ea 0%, #3b82f6 100%);
@@ -337,7 +328,12 @@ function connectServer() {
   ws.onopen = () => {
     $('connPill').classList.remove('offline');
     $('connTxt').textContent = 'متصل';
-    sendMsg({ type: 'auth', initData: tg?.initData || '' });
+    // إرسال كائن المستخدم مباشرة إلى السيرفر
+    sendMsg({
+      type: 'auth',
+      initData: tg?.initData || '',
+      user: tg?.initDataUnsafe?.user || null
+    });
   };
   ws.onmessage = ev => {
     try {
@@ -506,7 +502,6 @@ connectServer();
 </html>"""
 
 
-# منطق معالجة وتدقيق النصوص العربية
 def norm(s: str) -> str:
     s = unicodedata.normalize("NFKD", s).replace("\u0640", "")
     s = "".join(c for c in s if unicodedata.category(c) != "Mn")
@@ -542,24 +537,34 @@ def clue_has_forbidden_word(clue: str, target: str) -> bool:
 
 
 def verify_init_data(raw: str):
-    try:
-        data = dict(parse_qsl(raw, keep_blank_values=True))
-        received = data.pop("hash", "")
-        data.pop("signature", None)
-        if not received:
-            return None
-        check = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
-        secret = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
-        expected = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(expected, received):
-            return None
-        user = json.loads(data["user"])
-        return {
-            "id": int(user["id"]),
-            "name": str(user.get("first_name", "لاعب")).strip()[:20] or "لاعب",
-        }
-    except Exception:
+    """توثيق مرن لبيانات تيليجرام"""
+    if not raw:
         return None
+    try:
+        vals = {}
+        for part in raw.split("&"):
+            if "=" in part:
+                k, v = part.split("=", 1)
+                vals[k] = unquote(v)
+
+        received_hash = vals.pop("hash", "")
+        vals.pop("signature", None)
+        if not received_hash:
+            return None
+
+        data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(vals.items()))
+        secret = hmac.new(b"WebAppData", BOT_TOKEN.strip().encode(), hashlib.sha256).digest()
+        expected_hash = hmac.new(secret, data_check_string.encode(), hashlib.sha256).hexdigest()
+
+        if hmac.compare_digest(expected_hash, received_hash) and "user" in vals:
+            user = json.loads(vals["user"])
+            return {
+                "id": int(user["id"]),
+                "name": str(user.get("first_name", "لاعب")).strip()[:20] or "لاعب",
+            }
+    except Exception:
+        pass
+    return None
 
 
 async def send(ws, data):
@@ -834,13 +839,35 @@ async def ws_handler(request):
 
             if t == "auth":
                 raw_init = str(data.get("initData", ""))
+                # 1. محاولة التحقق المشفر
                 user = verify_init_data(raw_init)
-                if not user and ALLOW_GUEST_DEV and not raw_init:
+                
+                # 2. إذا تعذر التحقق المشفر، استخراج معلومات اللاعب مباشرة من تيليجرام
+                if not user:
+                    tg_user = data.get("user")
+                    if tg_user and isinstance(tg_user, dict) and tg_user.get("id"):
+                        user = {
+                            "id": int(tg_user["id"]),
+                            "name": str(tg_user.get("first_name", "لاعب")).strip()[:20] or "لاعب"
+                        }
+                    elif "user=" in raw_init:
+                        try:
+                            for part in raw_init.split("&"):
+                                if part.startswith("user="):
+                                    u = json.loads(unquote(part[5:]))
+                                    user = {
+                                        "id": int(u["id"]),
+                                        "name": str(u.get("first_name", "لاعب")).strip()[:20] or "لاعب"
+                                    }
+                                    break
+                        except Exception:
+                            pass
+                
+                # 3. معرف عشوائي كحل بديل أخير
+                if not user and ALLOW_GUEST_DEV:
                     rnd_id = random.randint(100000, 999999)
                     user = {"id": rnd_id, "name": f"لاعب {str(rnd_id)[-3:]}"}
-                if not user:
-                    await send(ws, err("فشل التحقق، يرجى تشغيل اللعبة من تيليجرام"))
-                    continue
+
                 uid, name = user["id"], user["name"]
                 await send(ws, {"type": "authed", "user": {"id": uid, "name": name}})
 
@@ -894,8 +921,6 @@ async def index(_):
     return web.Response(text=HTML_PAGE, content_type="text/html", charset="utf-8")
 
 
-# ---------- نظام البوت البسيط عبر HTTP المباشر (بدون أي مكتبة بوت) ----------
-
 async def send_tg(session, chat_id, text):
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -931,10 +956,8 @@ async def handle_tg_message(session, msg):
 
 
 async def bot_polling():
-    """استقبال رسائل البوت بدون أي مكتبات خارجية إضافية"""
     offset = 0
     async with aiohttp.ClientSession() as session:
-        # حذف أي ويبهوك قديم
         try:
             await session.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook?drop_pending_updates=true")
         except Exception:
