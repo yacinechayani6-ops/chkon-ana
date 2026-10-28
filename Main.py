@@ -1,6 +1,6 @@
 """
-شكون أنا؟ - Who Am I? - Qui suis-je?
-ملف بايثون واحد كامل خالي من أي أخطاء ومصحح 100%.
+شكون أنا؟ - النسخة الشاملة مع جميع الأنماط والميزات الجديدة
+ملف واحد مستقل يعمل عبر aiohttp بدون أي مكتبات إضافية.
 """
 import asyncio
 import hashlib
@@ -16,7 +16,6 @@ from urllib.parse import parse_qsl, unquote
 import aiohttp
 from aiohttp import WSMsgType, web
 
-# --- بيانات البوت والمالك ---
 BOT_TOKEN = os.getenv("BOT_TOKEN", "9269122102:AAFxKUbT6Bw4_lIfLWVenBDTWQ1M9_fGzMA")
 APP_URL = "https://chkon-ana.onrender.com/"
 OWNER_USERNAME = "IIlIlIlllIIllIIl"
@@ -30,49 +29,46 @@ ROUNDS = (3, 5, 8, 10)
 TIMERS = (30, 45, 60, 90)
 MAX_PLAYERS = 12
 
-WORDS = {
+# بنك الكلمات مع الكلمات المحظورة لنمط Taboo
+WORDS_DATA = {
     "celebs": [
-        "الشاب خالد", "الشاب حسني", "ياسمينة خضرا", "زين الدين زيدان", "لخضر بلومي",
-        "دحمان الحراشي", "وردة الجزائرية", "بيونة", "عثمان عريوات", "صالح أوقروت",
-        "لطفي دوبل كانون", "سولكينغ", "الشاب مامي", "محمد فلاق", "سليمان عازم",
-        "مفدي زكريا", "كاتب ياسين", "أحمد رضا حوحو", "عائشة عجوري", "حسان الحساني"
+        {"word": "الشاب خالد", "taboo": ["دي دي", "مغني", "وهران"]},
+        {"word": "زين الدين زيدان", "taboo": ["فرنسا", "ريال مدريد", "كرة"]},
+        {"word": "الشاب حسني", "taboo": ["راي", "عاطفي", "مرحوم"]},
+        {"word": "عثمان عريوات", "taboo": ["كرنفال في دشرة", "ممثل", "ضحك"]},
+        {"word": "صالح أوقروت", "taboo": ["عاشور العاشر", "جمعي فاملي", "كوميديا"]},
+        {"word": "لخضر بلومي", "taboo": ["رقم 10", "هدف", "المانيا"]},
+        {"word": "سولكينغ", "taboo": ["غناء", "راب", "فرنسا"]}
     ],
     "football": [
-        "رياض محرز", "إسماعيل بن ناصر", "يوسف بلايلي", "إسلام سليماني", "بغداد بونجاح",
-        "سفيان فيغولي", "رايس مبولحي", "مولودية الجزائر", "شبيبة القبائل", "شباب بلوزداد",
-        "ريال مدريد", "برشلونة", "مانشستر سيتي", "ليفربول", "بايرن ميونخ",
-        "ليونيل ميسي", "كريستيانو رونالدو", "كيليان مبابي", "محمد صلاح", "كريم بنزيما"
+        {"word": "رياض محرز", "taboo": ["سيتي", "أهلي", "يسارية"]},
+        {"word": "ليونيل ميسي", "taboo": ["أرجنتين", "برشلونة", "كرة ذهبية"]},
+        {"word": "كريستيانو رونالدو", "taboo": ["نصر", "برتغال", "ريال مدريد"]},
+        {"word": "محمد صلاح", "taboo": ["مصر", "ليفربول", "فخر العرب"]},
+        {"word": "إسماعيل بن ناصر", "taboo": ["ميلان", "وسط", "محارب"]},
+        {"word": "يوسف بلايلي", "taboo": ["مراوغ", "مولودية", "ترجي"]}
     ],
     "anime": [
-        "ناروتو", "لوفي", "غوكو", "ساسكي", "رورونوا زورو", "ليفاي أكرمان",
-        "إيرين ييغر", "كونان إيدوجاوا", "فيجيتا", "إيتاشي أوتشيها", "لايت ياغامي",
-        "غون فريكس", "كيلوا زولديك", "تانجيرو كامادو", "ساتورو غوجو", "سايتاما"
-    ],
-    "games": [
-        "ماينكرافت", "فورتنايت", "فيفا", "ببجي", "غراند ثفت أوتو",
-        "ليغ أوف ليجيندز", "فالورانت", "كول أوف ديوتي", "فري فاير", "روبلوكس",
-        "أمونغ آس", "كلاش أوف كلانس", "غود أوف وار", "ذا ويتشر", "أساسنز كريد"
-    ],
-    "movies": [
-        "تيتانيك", "الأسد الملك", "بريكينغ باد", "صراع العروش", "إنترستيلار",
-        "العراب", "هاري بوتر", "بريزون بريك", "بيكي بلايندرز", "الجوكر",
-        "ماتريكس", "باتمان", "سبايدرمان", "سيد الخواتم", "فايكنغز"
-    ],
-    "animals": [
-        "الفيل", "الزرافة", "البطريق", "القط", "الأسد",
-        "النسر", "الدلفين", "الذئب", "الكنغر", "الباندا",
-        "الحرباء", "البومة", "النمر", "الدب القطبي", "الثعلب"
+        {"word": "ناروتو", "taboo": ["نينجا", "ساسكي", "هوكاجي"]},
+        {"word": "لوفي", "taboo": ["قبعة القش", "ون بيس", "مطاط"]},
+        {"word": "غوكو", "taboo": ["دراغون بول", "سايان", "كاميهاميها"]},
+        {"word": "كونان", "taboo": ["متحري", "تقلص", "سينشي"]},
+        {"word": "ليفاي", "taboo": ["هجوم العمالقة", "قائد", "نظافة"]}
     ],
     "food": [
-        "الشخشوخة", "الكسكسي", "الشربة فريك", "المحجوبة", "الرشتة",
-        "طاجين الزيتون", "البوراك", "الكرنتيكا", "المسمن", "البقلاوة",
-        "المقروط", "الزلابية", "الشكشوكة", "الطمينة", "قلب اللوز"
+        {"word": "الشخشوخة", "taboo": ["بسكرة", "حار", "مرقة"]},
+        {"word": "الكسكسي", "taboo": ["جمعة", "طعام", "خضار"]},
+        {"word": "المحجوبة", "taboo": ["بصل", "حار", "فرينة"]},
+        {"word": "الكرنتيكا", "taboo": ["حمص", "وهران", "كمون"]},
+        {"word": "البوراك", "taboo": ["رمضان", "ديول", "بطاطا"]}
     ],
     "general": [
-        "القمر", "الأوكسجين", "برج إيفل", "الكهرباء", "الأهرامات",
-        "الإنترنت", "المقراب الفلكي", "الغواصة", "الطائرة", "البركان",
-        "الصحراء الكبرى", "البوصلة", "المجهر الإلكتروني", "المجموعة الشمسية", "الجاذبية"
-    ],
+        {"word": "برج إيفل", "taboo": ["باريس", "فرنسا", "حديد"]},
+        {"word": "الأهرامات", "taboo": ["مصر", "فراعنة", "مثلث"]},
+        {"word": "الإنترنت", "taboo": ["شبكة", "ويفي", "مواقع"]},
+        {"word": "الذكاء الاصطناعي", "taboo": ["روبوت", "حاسوب", "تفكير"]},
+        {"word": "السيارة", "taboo": ["عجلات", "سياقة", "محرك"]}
+    ]
 }
 
 def load_db(path):
@@ -125,14 +121,14 @@ def get_leaderboard_data():
         for idx, (uid, p) in enumerate(sorted_players)
     ]
 
-# --- واجهة المستخدم HTML/JS/CSS المصححة ---
+# --- كود الواجهة الكامل مع كافة الأنماط والتفاعلات ---
 HTML_PAGE = """<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="color-scheme" content="dark">
-<title>شكون أنا؟ • Who Am I?</title>
+<title>شكون أنا؟</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -143,140 +139,80 @@ HTML_PAGE = """<!DOCTYPE html>
   --bg-subtle: #0f0c22;
   --surface: #14112c;
   --surface-hover: #1c183d;
-  --surface-active: #231e4a;
-  --border: rgba(168, 85, 247, 0.18);
-  --border-focus: rgba(168, 85, 247, 0.45);
+  --border: rgba(168, 85, 247, 0.2);
   --text: #f8f7ff;
   --text-muted: #948fb3;
-  --text-dim: #676188;
   --primary: #9333ea;
   --primary-light: #a855f7;
   --gold: #eab308;
-  --silver: #94a3b8;
-  --bronze: #b45309;
   --success: #10b981;
   --danger: #ef4444;
   --grad-primary: linear-gradient(135deg, #9333ea 0%, #3b82f6 100%);
   --grad-surface: linear-gradient(180deg, rgba(25, 21, 53, 0.85) 0%, rgba(17, 14, 38, 0.95) 100%);
   --radius-lg: 20px;
   --radius-md: 14px;
-  --radius-sm: 10px;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
 html, body { min-height: 100%; background-color: var(--bg); }
 body {
   font-family: "Cairo", "Inter", system-ui, sans-serif;
   font-size: 14px;
-  line-height: 1.5;
   color: var(--text);
   background: radial-gradient(1000px 500px at 50% -120px, rgba(147, 51, 234, 0.22), transparent 75%), var(--bg);
   background-attachment: fixed;
   user-select: none;
-  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
 }
 html[dir="ltr"] body { font-family: "Inter", "Cairo", system-ui, sans-serif; }
 .sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
-.ic {
-  width: 19px; height: 19px; flex: none; fill: none; stroke: currentColor;
-  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
-  display: inline-block; vertical-align: middle;
-}
-.app { max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; padding: 14px; }
+.ic { width: 19px; height: 19px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; display: inline-block; vertical-align: middle; }
+.app { max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; padding: 14px; position: relative; }
 .top-nav { display: flex; align-items: center; gap: 8px; padding: 6px 0 14px; }
-.brand-badge { width: 38px; height: 38px; border-radius: 12px; background: var(--grad-primary); display: grid; place-items: center; color: #fff; box-shadow: 0 8px 20px rgba(147, 51, 234, 0.35); }
-.brand-info h1 { font-size: 16px; font-weight: 800; }
-.brand-info p { font-size: 11px; color: var(--text-muted); }
+.brand-badge { width: 38px; height: 38px; border-radius: 12px; background: var(--grad-primary); display: grid; place-items: center; color: #fff; }
 .grow { flex: 1; }
 .nav-actions { display: flex; align-items: center; gap: 6px; }
 .status-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 99px; background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
 .status-pill.offline .status-dot { background: var(--danger); }
-.icon-btn {
-  width: 36px; height: 36px; border-radius: 11px; border: 1px solid var(--border);
-  background: var(--surface); color: var(--text); display: grid; place-items: center;
-  cursor: pointer; transition: transform 0.12s, background 0.15s;
-}
-.icon-btn:active { transform: scale(0.92); }
-.lang-badge { font-size: 11px; font-weight: 800; color: var(--primary-light); }
-.card { background: var(--grad-surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; margin-bottom: 12px; backdrop-filter: blur(14px); }
+.icon-btn { width: 36px; height: 36px; border-radius: 11px; border: 1px solid var(--border); background: var(--surface); color: var(--text); display: grid; place-items: center; cursor: pointer; }
+.card { background: var(--grad-surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; margin-bottom: 12px; }
 .card-title { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 700; color: var(--text-muted); margin-bottom: 12px; }
-.card-title .ic { color: var(--primary-light); }
 .field { width: 100%; font-family: inherit; font-size: 14px; color: var(--text); background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; outline: none; }
-.field:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.2); }
-.code-field { text-align: center; letter-spacing: 0.25em; font-family: ui-monospace, Consolas, monospace; font-weight: 800; font-size: 18px; text-transform: uppercase; }
+.code-field { text-align: center; letter-spacing: 0.25em; font-family: monospace; font-weight: 800; font-size: 18px; text-transform: uppercase; }
 .row { display: flex; gap: 8px; }
 .row > * { flex: 1; min-width: 0; }
-.btn {
-  width: 100%; display: inline-flex; align-items: center; justify-content: center;
-  gap: 8px; border: 0; border-radius: var(--radius-md); padding: 13px 18px;
-  font-family: inherit; font-size: 14.5px; font-weight: 800; color: #fff;
-  background: var(--grad-primary); cursor: pointer; box-shadow: 0 8px 24px rgba(147, 51, 234, 0.32);
-}
-.btn:active { transform: scale(0.97); }
-.btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
-.btn-secondary { background: var(--surface-hover); border: 1px solid var(--border); color: var(--text); box-shadow: none; }
+.btn { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: var(--radius-md); padding: 13px 18px; font-family: inherit; font-size: 14.5px; font-weight: 800; color: #fff; background: var(--grad-primary); cursor: pointer; }
+.btn-secondary { background: var(--surface-hover); border: 1px solid var(--border); color: var(--text); }
 .btn-sm { width: auto; flex: none; padding: 12px 18px; }
-.room-code {
-  font-family: ui-monospace, Consolas, monospace; font-size: 36px; font-weight: 900;
-  letter-spacing: 0.3em; text-indent: 0.3em; background: var(--grad-primary);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-  text-align: center; margin: 10px 0;
-}
+.room-code { font-family: monospace; font-size: 36px; font-weight: 900; letter-spacing: 0.3em; text-indent: 0.3em; background: var(--grad-primary); -webkit-background-clip: text; background-clip: text; color: transparent; text-align: center; margin: 10px 0; }
 .players-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-.player-item { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: var(--radius-md); background: var(--bg-subtle); border: 1px solid var(--border); min-width: 0; }
-.player-item.offline { opacity: 0.55; }
-.avatar-badge { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; color: #fff; flex: none; font-size: 14px; }
-.player-info { min-width: 0; flex: 1; }
-.player-name { font-weight: 700; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.player-role { display: flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--text-muted); }
-.player-role .ic { width: 12px; height: 12px; color: var(--gold); }
-.timer-container { position: relative; width: 116px; height: 116px; margin: 0 auto 12px; }
-.timer-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-.timer-track { fill: none; stroke: var(--bg-subtle); stroke-width: 7; }
-.timer-progress { fill: none; stroke: var(--primary-light); stroke-width: 7; stroke-linecap: round; transition: stroke-dashoffset 0.25s linear; }
-.timer-content { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.timer-num { font-size: 32px; font-weight: 900; line-height: 1; }
-.timer-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
-.role-banner { display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 700; font-size: 13.5px; color: var(--text-muted); margin-bottom: 6px; }
-.target-word { min-height: 52px; display: grid; place-items: center; font-size: 28px; font-weight: 900; color: var(--gold); text-shadow: 0 0 24px rgba(234, 179, 8, 0.35); margin: 6px 0; text-align: center; }
-.target-word.masked { letter-spacing: 0.15em; color: var(--text-muted); text-shadow: none; }
-.result-banner { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 14px; border-radius: var(--radius-md); font-weight: 700; font-size: 13px; margin-top: 4px; }
-.result-banner.success { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: var(--success); }
-.result-banner.timeout { background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); color: var(--danger); }
-.feed-box { display: flex; flex-direction: column; gap: 8px; max-height: 160px; overflow-y: auto; }
-.feed-item { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 13px; }
-.feed-item.correct { border-color: rgba(16, 185, 129, 0.45); color: var(--success); }
-.leader-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
-.rank-pill { width: 24px; height: 24px; border-radius: 50%; background: var(--bg-subtle); color: var(--text-muted); display: grid; place-items: center; font-size: 11.5px; font-weight: 800; flex: none; }
-.leader-row:nth-child(1) .rank-pill { background: var(--gold); color: #1e1500; }
-.leader-row:nth-child(2) .rank-pill { background: var(--silver); color: #121820; }
-.leader-row:nth-child(3) .rank-pill { background: var(--bronze); color: #fff; }
-.podium-container { display: flex; align-items: flex-end; justify-content: center; gap: 8px; margin: 12px 0 16px; }
-.podium-slot { flex: 1; max-width: 110px; display: flex; flex-direction: column; align-items: center; text-align: center; }
-.podium-avatar { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 16px; color: #fff; margin-bottom: 6px; }
-.slot-1 .podium-avatar { width: 56px; height: 56px; border: 2px solid var(--gold); box-shadow: 0 0 18px rgba(250, 204, 21, 0.4); }
-.podium-bar { width: 100%; border-radius: 10px 10px 0 0; background: var(--surface-hover); border: 1px solid var(--border); padding: 8px 2px; }
-.slot-1 .podium-bar { height: 96px; background: linear-gradient(180deg, rgba(234, 179, 8, 0.25) 0%, rgba(20, 17, 44, 0.9) 100%); }
-.slot-2 .podium-bar { height: 72px; }
-.slot-3 .podium-bar { height: 52px; }
+.player-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--radius-md); background: var(--bg-subtle); border: 1px solid var(--border); min-width: 0; }
+.avatar-badge { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; color: #fff; flex: none; font-size: 13px; }
+.player-name { font-weight: 700; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.taboo-tag { display: inline-block; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: var(--danger); padding: 4px 10px; border-radius: 99px; font-size: 12px; font-weight: 700; margin: 2px; }
+.reactions-bar { display: flex; justify-content: center; gap: 10px; margin-top: 10px; padding: 8px; background: var(--bg-subtle); border-radius: var(--radius-md); border: 1px solid var(--border); }
+.react-btn { font-size: 20px; background: transparent; border: 0; cursor: pointer; transition: transform 0.15s; }
+.react-btn:active { transform: scale(1.3); }
+.flying-reaction { position: fixed; bottom: 80px; font-size: 32px; pointer-events: none; animation: flyUp 1.8s ease-out forwards; z-index: 9999; }
+@keyframes flyUp { 0% { opacity: 1; transform: translateY(0) scale(0.6); } 100% { opacity: 0; transform: translateY(-380px) scale(1.4); } }
+.badge-pill { display: inline-block; font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 99px; background: rgba(234, 179, 8, 0.15); color: var(--gold); border: 1px solid rgba(234, 179, 8, 0.3); }
 .modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 999; }
-.modal-box { width: 100%; max-width: 420px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); max-height: 85vh; overflow-y: auto; }
-.modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-.modal-header h3 { font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+.modal-box { width: 100%; max-width: 420px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; max-height: 85vh; overflow-y: auto; }
 .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 14px; }
 .stat-card { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px; text-align: center; }
 .stat-val { font-size: 22px; font-weight: 900; color: var(--gold); }
-.stat-lbl { font-size: 11px; color: var(--text-muted); font-weight: 700; margin-top: 2px; }
-.toast-msg { position: fixed; inset-inline: 0; bottom: 20px; margin: auto; width: max-content; max-width: 90%; display: flex; align-items: center; gap: 8px; background: var(--surface-active); border: 1px solid var(--border); padding: 10px 16px; border-radius: var(--radius-md); font-weight: 700; opacity: 0; transform: translateY(12px); transition: 0.2s; pointer-events: none; z-index: 1000; }
+.stat-lbl { font-size: 11px; color: var(--text-muted); font-weight: 700; }
+.toast-msg { position: fixed; inset-inline: 0; bottom: 20px; margin: auto; width: max-content; max-width: 90%; background: var(--surface-hover); border: 1px solid var(--border); padding: 10px 16px; border-radius: var(--radius-md); font-weight: 700; opacity: 0; transform: translateY(12px); transition: 0.2s; pointer-events: none; z-index: 1000; }
 .toast-msg.show { opacity: 1; transform: translateY(0); }
-.view { animation: fade-up 0.22s ease both; }
-@keyframes fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 .hidden { display: none !important; }
 .spinner { width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--primary-light); animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
 @keyframes spin { to { transform: rotate(360deg); } }
+canvas#confettiCanvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9998; }
 </style>
 </head>
 <body>
+
+<canvas id="confettiCanvas"></canvas>
 
 <svg class="sprite" aria-hidden="true">
   <symbol id="i-logo" viewBox="0 0 24 24"><path d="M12 2a8 8 0 0 0-8 8c0 3 2 5.5 5 7.2V19a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-1.8c3-1.7 5-4.2 5-7.2a8 8 0 0 0-8-8z"/><path d="M9 10a3 3 0 0 1 6 0c0 1.5-1.5 2.5-3 3"/><path d="M12 17h.01"/></symbol>
@@ -288,194 +224,203 @@ html[dir="ltr"] body { font-family: "Inter", "Cairo", system-ui, sans-serif; }
   <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></symbol>
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
   <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></symbol>
-  <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
   <symbol id="i-send" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></symbol>
-  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
-  <symbol id="i-refresh" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></symbol>
   <symbol id="i-close" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
 </svg>
 
 <div class="app">
   <header class="top-nav">
     <div class="brand-badge"><svg class="ic"><use href="#i-logo"/></svg></div>
-    <div class="brand-info">
+    <div style="margin-inline-start: 8px;">
       <h1 data-i18n="app_title">شكون أنا؟</h1>
-      <p data-i18n="app_sub">منصة التخمين والتحدي</p>
+      <p data-i18n="app_sub" style="font-size: 11px; color: var(--text-muted);">التحدي والمرح الجماعي</p>
     </div>
     <div class="grow"></div>
     <div class="nav-actions">
-      <button class="icon-btn" id="langBtn" title="Language"><span class="lang-badge" id="langTxt">AR</span></button>
-      <button class="icon-btn" id="leaderBtn" title="Leaderboard"><svg class="ic"><use href="#i-trophy"/></svg></button>
-      <button class="icon-btn" id="profileBtn" title="Profile"><svg class="ic"><use href="#i-user"/></svg></button>
-      <button class="icon-btn hidden" id="leaveBtn" title="Leave"><svg class="ic"><use href="#i-logout"/></svg></button>
+      <button class="icon-btn" id="langBtn"><span style="font-size:11px; font-weight:800; color:var(--primary-light);" id="langTxt">AR</span></button>
+      <button class="icon-btn" id="leaderBtn"><svg class="ic"><use href="#i-trophy"/></svg></button>
+      <button class="icon-btn" id="profileBtn"><svg class="ic"><use href="#i-user"/></svg></button>
+      <button class="icon-btn hidden" id="leaveBtn"><svg class="ic"><use href="#i-logout"/></svg></button>
     </div>
   </header>
 
   <div class="status-pill offline" id="connPill" style="align-self: center; margin-bottom: 10px;">
-    <span class="status-dot"></span><span id="connTxt" data-i18n="connecting">جاري الاتصال...</span>
+    <span class="status-dot"></span><span id="connTxt">جاري الاتصال...</span>
   </div>
 
   <div id="toast" class="toast-msg"></div>
 
-  <!-- شاشة البدء والتحميل -->
+  <!-- شاشة التحميل -->
   <section id="bootView" style="text-align: center; padding: 70px 0;">
-    <div class="spinner"></div><p style="color: var(--text-muted); font-weight: 700;" data-i18n="connecting_server">جاري الاتصال بالخادم الآمن...</p>
+    <div class="spinner"></div><p style="color: var(--text-muted); font-weight: 700;">جاري فتح اللعبة والاتصال...</p>
   </section>
 
   <!-- الواجهة الرئيسية -->
-  <section id="homeView" class="view hidden">
-    <div class="card" style="text-align: center; padding: 24px 16px;">
-      <h2 style="font-size: 20px; font-weight: 900; margin-bottom: 6px;" data-i18n="hero_title">تحدي التخمين الجماعي</h2>
-      <p style="font-size: 13.5px; color: var(--text-muted); margin-bottom: 18px;" data-i18n="hero_desc">أنشئ غرفة خاصة وشارك الرمز مع أصدقائك لبدء التحدي.</p>
-      <button class="btn" id="createBtn">
-        <svg class="ic"><use href="#i-plus"/></svg><span data-i18n="btn_create">إنشاء غرفة جديدة</span>
-      </button>
-    </div>
-    <div class="card">
-      <div class="card-title">
-        <svg class="ic"><use href="#i-target"/></svg><span data-i18n="title_join">الانضمام إلى غرفة</span>
+  <section id="homeView" class="hidden">
+    <div class="card" style="text-align: center; padding: 20px 16px;">
+      <h2 style="font-size: 19px; font-weight: 900; margin-bottom: 6px;">تحدي التخمين والمندس</h2>
+      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">العب مع أصدقائك أو ابحث عن مباراة سريعة أونلاين!</p>
+      
+      <div class="row" style="margin-bottom: 10px;">
+        <button class="btn" id="quickBtn" style="background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);">
+          <svg class="ic"><use href="#i-zap"/></svg><span>لعب سريع عشوائي</span>
+        </button>
       </div>
+
+      <div class="row">
+        <button class="btn" id="createBtn">
+          <svg class="ic"><use href="#i-plus"/></svg><span>إنشاء غرفة خاصة</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><svg class="ic"><use href="#i-target"/></svg><span>الانضمام برمز الغرفة</span></div>
       <div class="row">
         <input id="joinCodeIn" class="field code-field" maxlength="5" placeholder="ABCDE">
-        <button class="btn btn-sm" id="joinBtn"><span data-i18n="btn_join">انضمام</span></button>
+        <button class="btn btn-sm" id="joinBtn"><span>انضمام</span></button>
       </div>
     </div>
   </section>
 
   <!-- غرفة الانتظار (Lobby) -->
-  <section id="lobbyView" class="view hidden">
+  <section id="lobbyView" class="hidden">
     <div class="card" style="text-align: center;">
-      <div style="font-size: 12px; color: var(--text-muted); font-weight: 700;" data-i18n="room_code_label">رمز الغرفة الرسمي</div>
+      <div style="font-size: 11.5px; color: var(--text-muted); font-weight: 700;">رمز الغرفة الرسمي</div>
       <div class="room-code" id="displayCode">-----</div>
-      <div class="row" style="max-width: 270px; margin: 0 auto;">
-        <button class="btn btn-secondary btn-sm" id="copyBtn">
-          <svg class="ic"><use href="#i-copy"/></svg><span data-i18n="btn_copy">نسخ</span>
-        </button>
-        <button class="btn btn-secondary btn-sm" id="shareBtn">
-          <svg class="ic"><use href="#i-share"/></svg><span data-i18n="btn_share">دعوة</span>
-        </button>
+      <div class="row" style="max-width: 260px; margin: 0 auto;">
+        <button class="btn btn-secondary btn-sm" id="copyBtn"><svg class="ic"><use href="#i-copy"/></svg><span>نسخ</span></button>
+        <button class="btn btn-secondary btn-sm" id="shareBtn"><svg class="ic"><use href="#i-share"/></svg><span>دعوة</span></button>
       </div>
     </div>
+
     <div class="card">
-      <div class="card-title">
-        <svg class="ic"><use href="#i-user"/></svg>
-        <span data-i18n="players_list">اللاعبون</span>
-        <span class="grow"></span><span id="playerCount">0 / 12</span>
-      </div>
+      <div class="card-title"><span>اللاعبون</span><span class="grow"></span><span id="playerCount">0 / 12</span></div>
       <div class="players-grid" id="playersList"></div>
     </div>
+
     <div class="card">
-      <div class="card-title"><span data-i18n="match_settings">إعدادات المباراة</span></div>
+      <div class="card-title"><span>إعدادات اللعبة والنمط</span></div>
       <div style="margin-bottom: 10px;">
-        <label style="font-size: 12px; color: var(--text-muted); font-weight: 700;" data-i18n="lbl_category">فئة الكلمات</label>
+        <label style="font-size: 11.5px; color: var(--text-muted); font-weight: 700;">نمط اللعبة</label>
+        <select id="selMode" class="field">
+          <option value="classic">كلاسيكي (مخمن وبقية اللاعبين تلميحات)</option>
+          <option value="undercover">المندس / الجاسوس (الكل يعرف الكلمة ما عدا الجاسوس)</option>
+          <option value="taboo">الكلمات الممنوعة (تلميح دون ذكر 3 كلمات محظورة)</option>
+        </select>
+      </div>
+      <div style="margin-bottom: 10px;">
+        <label style="font-size: 11.5px; color: var(--text-muted); font-weight: 700;">الفئة</label>
         <select id="selCat" class="field"></select>
       </div>
       <div class="row">
-        <div>
-          <label style="font-size: 12px; color: var(--text-muted); font-weight: 700;" data-i18n="lbl_rounds">الجولات</label>
-          <select id="selRounds" class="field"></select>
-        </div>
-        <div>
-          <label style="font-size: 12px; color: var(--text-muted); font-weight: 700;" data-i18n="lbl_timer">وقت الجولة</label>
-          <select id="selTimer" class="field"></select>
-        </div>
+        <div><label style="font-size: 11.5px; color: var(--text-muted); font-weight: 700;">الجولات</label><select id="selRounds" class="field"></select></div>
+        <div><label style="font-size: 11.5px; color: var(--text-muted); font-weight: 700;">الوقت</label><select id="selTimer" class="field"></select></div>
       </div>
     </div>
+
     <p id="lobbyHint" style="font-size: 12px; text-align: center; margin-bottom: 12px; color: var(--text-muted); font-weight: 700;"></p>
-    <button class="btn" id="startBtn">
-      <svg class="ic"><use href="#i-play"/></svg><span data-i18n="btn_start">بدء المباراة</span>
-    </button>
+    <button class="btn" id="startBtn"><svg class="ic"><use href="#i-play"/></svg><span>بدء المباراة</span></button>
   </section>
 
   <!-- شاشة اللعب النشطة -->
-  <section id="gameView" class="view hidden">
+  <section id="gameView" class="hidden">
     <div class="card" style="text-align: center;">
-      <div class="timer-container">
-        <svg class="timer-svg" viewBox="0 0 120 120">
-          <circle class="timer-track" cx="60" cy="60" r="52"/>
-          <circle id="timerProgress" class="timer-progress" cx="60" cy="60" r="52"/>
-        </svg>
-        <div class="timer-content">
-          <div class="timer-num" id="timerSecs">0</div>
-          <div class="timer-sub" data-i18n="secs">ثانية</div>
-        </div>
+      <div style="font-size: 12px; font-weight: 800; color: var(--primary-light); margin-bottom: 6px;" id="gameModeBanner">نمط كلاسيكي</div>
+      <div style="font-size: 30px; font-weight: 900; line-height: 1;" id="timerSecs">60</div>
+      <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">ثانية متبقية</div>
+
+      <div style="font-weight: 700; color: var(--text-muted);" id="roleText">...</div>
+      <div style="font-size: 26px; font-weight: 900; color: var(--gold); margin: 6px 0;" id="targetWord">...</div>
+      
+      <!-- الكلمات الممنوعة إن وجدت -->
+      <div id="tabooBox" class="hidden" style="margin-top: 6px;">
+        <div style="font-size: 11px; color: var(--danger); font-weight: 800; margin-bottom: 4px;">ممنوع استخدام هذه الكلمات في التلميح:</div>
+        <div id="tabooWordsList"></div>
       </div>
-      <div class="role-banner">
-        <svg class="ic" id="roleIcon"><use href="#i-target"/></svg>
-        <span id="roleText">...</span>
-      </div>
-      <div class="target-word" id="targetWord">...</div>
-      <div id="resultBanner" class="result-banner hidden"></div>
+
+      <div id="resultBanner" class="hidden" style="font-weight: 800; margin-top: 8px;"></div>
     </div>
+
+    <!-- صندوق التلميح -->
     <div class="card hidden" id="clueCard">
-      <div class="card-title"><svg class="ic"><use href="#i-bulb"/></svg><span data-i18n="give_clue_title">اكتب تلميحاً ذكياً</span></div>
+      <div class="card-title"><svg class="ic"><use href="#i-bulb"/></svg><span>اكتب تلميحاً ذكياً</span></div>
       <div class="row">
-        <input id="clueInput" class="field" maxlength="80">
+        <input id="clueInput" class="field" maxlength="80" placeholder="اكتب التلميح هنا...">
         <button class="btn btn-sm" id="sendClueBtn"><svg class="ic"><use href="#i-send"/></svg></button>
       </div>
     </div>
+
+    <!-- صندوق التخمين -->
     <div class="card hidden" id="guessCard">
-      <div class="card-title"><svg class="ic"><use href="#i-target"/></svg><span data-i18n="make_guess_title">اكتب تخمينك للكلمة</span></div>
+      <div class="card-title"><svg class="ic"><use href="#i-target"/></svg><span>اكتب تخمينك للكلمة</span></div>
       <div class="row">
-        <input id="guessInput" class="field" maxlength="40">
-        <button class="btn btn-sm" id="sendGuessBtn"><span data-i18n="btn_guess">تخمين</span></button>
+        <input id="guessInput" class="field" maxlength="40" placeholder="ما هي الكلمة المطلوبة؟">
+        <button class="btn btn-sm" id="sendGuessBtn"><span>تخمين</span></button>
       </div>
     </div>
-    <div class="row" style="margin-bottom: 12px;">
-      <div class="card" style="margin: 0;"><div class="card-title"><svg class="ic"><use href="#i-bulb"/></svg><span data-i18n="clues_box">التلميحات</span></div><div class="feed-box" id="cluesFeed"></div></div>
-      <div class="card" style="margin: 0;"><div class="card-title"><svg class="ic"><use href="#i-target"/></svg><span data-i18n="guesses_box">المحاولات</span></div><div class="feed-box" id="guessesFeed"></div></div>
+
+    <!-- التلميحات والمحاولات -->
+    <div class="row" style="margin-bottom: 10px;">
+      <div class="card" style="margin: 0;"><div class="card-title">التلميحات</div><div id="cluesFeed" style="max-height: 140px; overflow-y: auto;"></div></div>
+      <div class="card" style="margin: 0;"><div class="card-title">المحاولات</div><div id="guessesFeed" style="max-height: 140px; overflow-y: auto;"></div></div>
     </div>
-    <div class="card">
-      <div class="card-title"><svg class="ic"><use href="#i-trophy"/></svg><span data-i18n="live_scores">الترتيب المباشر</span></div>
-      <div id="liveScores"></div>
+
+    <!-- التفاعلات الحية العائمة -->
+    <div class="reactions-bar">
+      <button class="react-btn" onclick="sendReaction('👏')">👏</button>
+      <button class="react-btn" onclick="sendReaction('🔥')">🔥</button>
+      <button class="react-btn" onclick="sendReaction('😂')">😂</button>
+      <button class="react-btn" onclick="sendReaction('🤔')">🤔</button>
+      <button class="react-btn" onclick="sendReaction('😱')">😱</button>
     </div>
   </section>
 
-  <!-- شاشة نهاية المباراة -->
-  <section id="endView" class="view hidden">
+  <!-- شاشة نهاية اللعبة -->
+  <section id="endView" class="hidden">
     <div class="card" style="text-align: center; padding: 24px 16px;">
       <svg class="ic" style="width: 44px; height: 44px; color: var(--gold); margin-bottom: 8px;"><use href="#i-trophy"/></svg>
       <h2 style="font-size: 22px; font-weight: 900;" id="winnerTitle">...</h2>
-      <p style="color: var(--text-muted); margin-top: 4px; font-size: 13.5px;" id="winnerSub">...</p>
+      <p style="color: var(--text-muted); margin-top: 4px;" id="winnerSub">...</p>
     </div>
-    <div class="podium-container" id="podiumBox"></div>
-    <div class="card"><div class="card-title"><span data-i18n="final_results">النتائج النهائية</span></div><div id="finalScores"></div></div>
+    <div class="card"><div class="card-title">الترتيب النهائي</div><div id="finalScores"></div></div>
     <div class="row">
-      <button class="btn" id="restartBtn"><svg class="ic"><use href="#i-refresh"/></svg><span data-i18n="btn_restart">جولة جديدة</span></button>
-      <button class="btn btn-secondary" id="exitHomeBtn"><svg class="ic"><use href="#i-logout"/></svg><span data-i18n="btn_home">الرئيسية</span></button>
+      <button class="btn" id="restartBtn"><svg class="ic"><use href="#i-play"/></svg><span>جولة جديدة</span></button>
+      <button class="btn btn-secondary" id="exitHomeBtn">الرئيسية</button>
     </div>
   </section>
 
-  <!-- نافذة ليدر بورد المتصدرين -->
+  <!-- نافذة ليدربورد المتصدرين -->
   <div class="modal-overlay hidden" id="leaderModal">
     <div class="modal-box">
-      <div class="modal-header">
-        <h3><svg class="ic" style="color: var(--gold);"><use href="#i-trophy"/></svg><span data-i18n="top_players">لوحة الصدارة العالمية</span></h3>
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+        <h3 style="display:flex; align-items:center; gap:8px;"><svg class="ic" style="color:var(--gold);"><use href="#i-trophy"/></svg><span>لوحة الصدارة</span></h3>
         <button class="icon-btn" id="closeLeaderBtn"><svg class="ic"><use href="#i-close"/></svg></button>
       </div>
       <div id="globalLeaderList"></div>
     </div>
   </div>
 
-  <!-- نافذة البروفايل -->
+  <!-- نافذة البروفايل والرتب -->
   <div class="modal-overlay hidden" id="profileModal">
     <div class="modal-box">
-      <div class="modal-header">
-        <h3><svg class="ic" style="color: var(--primary-light);"><use href="#i-user"/></svg><span data-i18n="profile_title">الملف الشخصي</span></h3>
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+        <h3 style="display:flex; align-items:center; gap:8px;"><svg class="ic"><use href="#i-user"/></svg><span>الملف الشخصي والرتبة</span></h3>
         <button class="icon-btn" id="closeProfileBtn"><svg class="ic"><use href="#i-close"/></svg></button>
       </div>
-      <div style="text-align: center; padding: 10px 0;">
-        <div class="avatar-badge" id="profAvatar" style="width: 60px; height: 60px; font-size: 24px; margin: 0 auto 10px;">ل</div>
-        <h4 style="font-size: 17px; font-weight: 800;" id="profName">لاعب</h4>
-        <p style="font-size: 12px; color: var(--text-muted);" id="profId">ID: -----</p>
+      <div style="text-align: center; padding: 6px 0 12px;">
+        <div class="avatar-badge" id="profAvatar" style="width: 56px; height: 56px; font-size: 22px; margin: 0 auto 8px;">ل</div>
+        <h4 style="font-size: 16px; font-weight: 800;" id="profName">لاعب</h4>
+        <div class="badge-pill" id="profTitle" style="margin-top: 4px;">مبتدئ</div>
       </div>
       <div class="stat-grid">
-        <div class="stat-card"><div class="stat-val" id="profScore">0</div><div class="stat-lbl" data-i18n="total_score">مجموع النقاط</div></div>
-        <div class="stat-card"><div class="stat-val" id="profWins">0</div><div class="stat-lbl" data-i18n="total_wins">مرات الفوز</div></div>
-        <div class="stat-card"><div class="stat-val" id="profGames">0</div><div class="stat-lbl" data-i18n="total_games">مباريات لعبتها</div></div>
-        <div class="stat-card"><div class="stat-val" id="profWinRate">0%</div><div class="stat-lbl" data-i18n="win_rate">نسبة الفوز</div></div>
+        <div class="stat-card"><div class="stat-val" id="profScore">0</div><div class="stat-lbl">مجموع النقاط</div></div>
+        <div class="stat-card"><div class="stat-val" id="profWins">0</div><div class="stat-lbl">مرات الفوز</div></div>
+        <div class="stat-card"><div class="stat-val" id="profGames">0</div><div class="stat-lbl">مباريات لعبتها</div></div>
+        <div class="stat-card"><div class="stat-val" id="profWinRate">0%</div><div class="stat-lbl">نسبة الفوز</div></div>
       </div>
     </div>
   </div>
@@ -485,208 +430,26 @@ html[dir="ltr"] body { font-family: "Inter", "Cairo", system-ui, sans-serif; }
 const tg = window.Telegram?.WebApp;
 try { tg?.ready(); tg?.expand(); } catch (_) {}
 
-const I18N = {
-  ar: {
-    app_title: "شكون أنا؟",
-    app_sub: "منصة التخمين والتحدي",
-    connected: "متصل",
-    connecting: "جاري الاتصال...",
-    connecting_server: "جاري الاتصال بالخادم الآمن...",
-    hero_title: "تحدي التخمين الجماعي",
-    hero_desc: "أنشئ غرفة خاصة وشارك الرمز مع أصدقائك لبدء التحدي.",
-    btn_create: "إنشاء غرفة جديدة",
-    title_join: "الانضمام إلى غرفة",
-    btn_join: "انضمام",
-    room_code_label: "رمز الغرفة الرسمي",
-    btn_copy: "نسخ",
-    btn_share: "دعوة",
-    players_list: "اللاعبون",
-    match_settings: "إعدادات المباراة",
-    lbl_category: "فئة الكلمات",
-    lbl_rounds: "الجولات",
-    lbl_timer: "وقت الجولة",
-    btn_start: "بدء المباراة",
-    give_clue_title: "اكتب تلميحاً ذكياً لمساعدة المخمن",
-    make_guess_title: "اكتب إجابتك لتخمين الكلمة",
-    btn_guess: "تخمين",
-    clues_box: "التلميحات",
-    guesses_box: "المحاولات",
-    live_scores: "الترتيب المباشر",
-    final_results: "النتائج النهائية",
-    btn_restart: "جولة جديدة",
-    btn_home: "الرئيسية",
-    top_players: "لوحة الصدارة العالمية",
-    profile_title: "الملف الشخصي",
-    total_score: "مجموع النقاط",
-    total_wins: "مرات الفوز",
-    total_games: "مباريات لعبتها",
-    win_rate: "نسبة الفوز",
-    secs: "ثانية",
-    host: "المضيف",
-    pts: "ن",
-    winner_is: "الفائز: ",
-    no_winner: "انتهت المباراة بتعادل الجميع",
-    time_up: "انتهى الوقت المحدد",
-    guessed_correctly: "تم التخمين بنجاح!",
-    your_turn: "دورك للتخمين الآن",
-    current_guesser: "المخمن الحالي: ",
-    copied: "تم نسخ رمز الغرفة بنجاح",
-    min_players: "يلزم لاعبين على الأقل للبدء",
-    waiting_host: "بانتظار مضيف الغرفة للبدء...",
-    ready_host: "اللاعبون جاهزون، يمكنك البدء الآن"
-  },
-  en: {
-    app_title: "Who Am I?",
-    app_sub: "Multiplayer Guessing Game",
-    connected: "Connected",
-    connecting: "Connecting...",
-    connecting_server: "Connecting to secure server...",
-    hero_title: "Social Guessing Challenge",
-    hero_desc: "Create a private room and share the code to start playing.",
-    btn_create: "Create New Room",
-    title_join: "Join a Room",
-    btn_join: "Join",
-    room_code_label: "Official Room Code",
-    btn_copy: "Copy",
-    btn_share: "Invite",
-    players_list: "Players",
-    match_settings: "Match Settings",
-    lbl_category: "Word Category",
-    lbl_rounds: "Rounds",
-    lbl_timer: "Round Timer",
-    btn_start: "Start Match",
-    give_clue_title: "Write a clever clue for the guesser",
-    make_guess_title: "Guess the target word",
-    btn_guess: "Guess",
-    clues_box: "Clues",
-    guesses_box: "Attempts",
-    live_scores: "Live Standings",
-    final_results: "Final Results",
-    btn_restart: "New Match",
-    btn_home: "Home",
-    top_players: "Global Leaderboard",
-    profile_title: "Player Profile",
-    total_score: "Total Points",
-    total_wins: "Total Wins",
-    total_games: "Games Played",
-    win_rate: "Win Rate",
-    secs: "sec",
-    host: "Host",
-    pts: "pts",
-    winner_is: "Winner: ",
-    no_winner: "Match ended in a tie",
-    time_up: "Time is up!",
-    guessed_correctly: "Guessed correctly!",
-    your_turn: "It's your turn to guess!",
-    current_guesser: "Current Guesser: ",
-    copied: "Room code copied to clipboard",
-    min_players: "At least 2 players required to start",
-    waiting_host: "Waiting for the host to start...",
-    ready_host: "All players ready, host can start"
-  },
-  fr: {
-    app_title: "Qui suis-je ?",
-    app_sub: "Jeu de devinettes multijoueur",
-    connected: "Connecté",
-    connecting: "Connexion...",
-    connecting_server: "Connexion au serveur sécurisé...",
-    hero_title: "Défi de devinette en groupe",
-    hero_desc: "Créez un salon privé et partagez le code pour jouer.",
-    btn_create: "Créer un salon",
-    title_join: "Rejoindre un salon",
-    btn_join: "Rejoindre",
-    room_code_label: "Code du salon",
-    btn_copy: "Copier",
-    btn_share: "Inviter",
-    players_list: "Joueurs",
-    match_settings: "Paramètres de la partie",
-    lbl_category: "Catégorie",
-    lbl_rounds: "Manches",
-    lbl_timer: "Temps",
-    btn_start: "Lancer la partie",
-    give_clue_title: "Écrivez un indice malin",
-    make_guess_title: "Devinez le mot secret",
-    btn_guess: "Valider",
-    clues_box: "Indices",
-    guesses_box: "Tentatives",
-    live_scores: "Classement en direct",
-    final_results: "Résultats finaux",
-    btn_restart: "Nouvelle partie",
-    btn_home: "Accueil",
-    top_players: "Classement mondial",
-    profile_title: "Profil du joueur",
-    total_score: "Points totaux",
-    total_wins: "Victoires",
-    total_games: "Parties jouées",
-    win_rate: "Taux de victoire",
-    secs: "sec",
-    host: "Hôte",
-    pts: "pts",
-    winner_is: "Vainqueur : ",
-    no_winner: "Partie terminée par une égalité",
-    time_up: "Temps écoulé !",
-    guessed_correctly: "Mot trouvé avec succès !",
-    your_turn: "C'est votre tour de deviner !",
-    current_guesser: "Devineur actuel : ",
-    copied: "Code copié dans le presse-papier",
-    min_players: "Au moins 2 joueurs requis",
-    waiting_host: "En attente de l'hôte...",
-    ready_host: "Les joueurs sont prêts, vous pouvez lancer"
-  }
-};
-
-const CATEGORIES_TRANSLATIONS = {
-  ar: { celebs: 'مشاهير وثقافة', football: 'كرة قدم وأندية', anime: 'شخصيات أنمي', games: 'ألعاب فيديو', movies: 'أفلام ومسلسلات', animals: 'عالم الحيوان', food: 'أكلات ومأكولات', general: 'معلومات عامة' },
-  en: { celebs: 'Celebrities & Culture', football: 'Football & Clubs', anime: 'Anime Characters', games: 'Video Games', movies: 'Movies & Series', animals: 'Animal Kingdom', food: 'Food & Dishes', general: 'General Knowledge' },
-  fr: { celebs: 'Célébrités & Culture', football: 'Football & Clubs', anime: "Personnages d'Anime", games: 'Jeux Vidéo', movies: 'Films & Séries', animals: 'Monde Animal', food: 'Gastronomie', general: 'Culture Générale' }
-};
-
-let currentLang = localStorage.getItem('game_lang') || 'ar';
-
-function setLanguage(lang) {
-  currentLang = lang;
-  localStorage.setItem('game_lang', lang);
-  document.documentElement.lang = lang;
-  document.documentElement.dir = (lang === 'ar') ? 'rtl' : 'ltr';
-  $('langTxt').textContent = lang.toUpperCase();
-
-  document.querySelectorAll('[data-i18n]').forEach(el => {
-    const key = el.getAttribute('data-i18n');
-    if (I18N[lang] && I18N[lang][key]) el.textContent = I18N[lang][key];
-  });
-
-  const selCat = $('selCat');
-  const curVal = selCat.value;
-  selCat.replaceChildren();
-  Object.entries(CATEGORIES_TRANSLATIONS[lang]).forEach(([k, v]) => {
-    selCat.add(new Option(v, k));
-  });
-  if (curVal) selCat.value = curVal;
-
-  const selRounds = $('selRounds');
-  const curR = selRounds.value;
-  selRounds.replaceChildren();
-  [3, 5, 8, 10].forEach(n => selRounds.add(new Option(`${n} ${lang==='ar'?'جولات':(lang==='fr'?'manches':'rounds')}`, n)));
-  if (curR) selRounds.value = curR;
-
-  const selTimer = $('selTimer');
-  const curT = selTimer.value;
-  selTimer.replaceChildren();
-  [30, 45, 60, 90].forEach(n => selTimer.add(new Option(`${n} ${I18N[lang].secs}`, n)));
-  if (curT) selTimer.value = curT;
-
-  if (state) render();
-}
-
 const $ = id => document.getElementById(id);
-const CIRCUMFERENCE = 2 * Math.PI * 52;
 const VIEWS = ['homeView', 'lobbyView', 'gameView', 'endView'];
-
 let ws = null, me = null, state = null, timerInterval = null;
 let currentRoomCode = new URLSearchParams(location.search).get('room')?.toUpperCase() || null;
-let globalLeaderboardCache = [];
 
-$('timerProgress').style.strokeDasharray = CIRCUMFERENCE;
+const CATEGORIES = {
+  celebs: 'مشاهير وثقافة',
+  football: 'كرة قدم وأندية',
+  anime: 'شخصيات أنمي',
+  food: 'أكلات ومأكولات',
+  general: 'معلومات عامة'
+};
+
+const populateSelect = (el, arr) => {
+  el.replaceChildren();
+  for (const [val, label] of arr) el.add(new Option(label, val));
+};
+populateSelect($('selCat'), Object.entries(CATEGORIES));
+populateSelect($('selRounds'), [3, 5, 8, 10].map(n => [n, `${n} جولات`]));
+populateSelect($('selTimer'), [30, 45, 60, 90].map(n => [n, `${n} ثانية`]));
 
 function switchView(viewId) {
   $('bootView').classList.add('hidden');
@@ -705,19 +468,42 @@ function sendMsg(obj) {
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
 }
 
+function getTitleByScore(pts) {
+  if (pts > 500) return 'أسطورة شكون أنا 🏆';
+  if (pts > 200) return 'ثعلب التخمين 🦊';
+  if (pts > 50) return 'محقق ذكي 🔍';
+  return 'مبتدئ 🌱';
+}
+
+function updateProfileUI(u) {
+  if (!u) return;
+  $('profName').textContent = u.name;
+  $('profAvatar').textContent = (u.name || 'ل')[0];
+  $('profAvatar').style.background = `hsl(${Math.abs(u.id * 53)%360},65%,45%)`;
+  const s = u.stats || {};
+  $('profScore').textContent = s.score || 0;
+  $('profWins').textContent = s.wins || 0;
+  $('profGames').textContent = s.games || 0;
+  const rate = s.games ? Math.round((s.wins / s.games) * 100) : 0;
+  $('profWinRate').textContent = `${rate}%`;
+  $('profTitle').textContent = getTitleByScore(s.score || 0);
+}
+
 function connectServer() {
   const protocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
-  ws = new WebSocket(`${protocol}${location.host}/ws`);
+  const host = location.host || 'chkon-ana.onrender.com';
+  ws = new WebSocket(`${protocol}${host}/ws`);
 
   ws.onopen = () => {
     $('connPill').classList.remove('offline');
-    $('connTxt').textContent = I18N[currentLang].connected;
+    $('connTxt').textContent = 'متصل';
     sendMsg({
       type: 'auth',
       initData: tg?.initData || '',
       user: tg?.initDataUnsafe?.user || null
     });
   };
+
   ws.onmessage = ev => {
     try {
       const m = JSON.parse(ev.data);
@@ -730,73 +516,141 @@ function connectServer() {
         state = m.state;
         currentRoomCode = state.code;
         render();
+      } else if (m.type === 'reaction') {
+        spawnReaction(m.emoji);
       } else if (m.type === 'leaderboard') {
-        globalLeaderboardCache = m.data;
-        renderGlobalLeaderboard(m.data);
+        renderLeaderboard(m.data);
       } else if (m.type === 'error') {
         toast(m.message);
         if (!state) switchView('homeView');
       }
     } catch (_) {}
   };
+
   ws.onclose = () => {
     $('connPill').classList.add('offline');
-    $('connTxt').textContent = (currentLang === 'ar') ? 'غير متصل' : 'Offline';
+    $('connTxt').textContent = 'جاري إعادة الاتصال...';
     setTimeout(connectServer, 2000);
   };
 }
 
-const getPlayerName = id => state?.players.find(p => p.id === id)?.name || 'Player';
+// حزام أمان ذكي: يمنع الشاشة من التعليق أبداً
+setTimeout(() => {
+  if (!me) {
+    me = tg?.initDataUnsafe?.user || { id: Math.floor(100000 + Math.random()*900000), first_name: "لاعب" };
+    me.name = me.first_name || me.name || "لاعب";
+    updateProfileUI(me);
+    switchView('homeView');
+  }
+}, 3000);
+
+function sendReaction(emoji) {
+  sendMsg({ type: 'reaction', emoji });
+  spawnReaction(emoji);
+}
+
+function spawnReaction(emoji) {
+  const el = document.createElement('div');
+  el.className = 'flying-reaction';
+  el.textContent = emoji;
+  el.style.left = `${30 + Math.random() * 40}%`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1800);
+}
+
+function launchConfetti() {
+  const canvas = $('confettiCanvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const pieces = Array.from({length: 60}, () => ({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height - canvas.height,
+    size: Math.random() * 8 + 4,
+    color: ['#9333ea', '#3b82f6', '#eab308', '#10b981', '#ef4444'][Math.floor(Math.random()*5)],
+    velY: Math.random() * 3 + 2,
+    velX: Math.random() * 2 - 1
+  }));
+  let frames = 0;
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    pieces.forEach(p => {
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x, p.y, p.size, p.size);
+      p.y += p.velY;
+      p.x += p.velX;
+    });
+    frames++;
+    if (frames < 120) requestAnimationFrame(draw);
+    else ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+  draw();
+}
+
+const getPlayerName = id => state?.players.find(p => p.id === id)?.name || 'لاعب';
 
 function render() {
   if (!state || !me) return switchView('homeView');
-  const t = I18N[currentLang];
 
   if (state.status === 'lobby') {
     switchView('lobbyView');
     const isHost = state.host === me.id;
     $('displayCode').textContent = state.code;
     $('playerCount').textContent = `${state.players.length} / 12`;
+    $('selMode').value = state.settings.mode || 'classic';
     $('selCat').value = state.settings.category;
     $('selRounds').value = state.settings.rounds;
     $('selTimer').value = state.settings.timer;
-    ['selCat', 'selRounds', 'selTimer'].forEach(id => { $(id).disabled = !isHost; });
+    ['selMode', 'selCat', 'selRounds', 'selTimer'].forEach(id => { $(id).disabled = !isHost; });
     $('startBtn').disabled = !isHost || state.players.length < 2;
-
-    if (state.players.length < 2) $('lobbyHint').textContent = t.min_players;
-    else if (isHost) $('lobbyHint').textContent = t.ready_host;
-    else $('lobbyHint').textContent = t.waiting_host;
 
     const list = $('playersList');
     list.replaceChildren();
     state.players.forEach(p => {
       const d = document.createElement('div');
-      d.className = `player-item ${p.online ? '' : 'offline'}`;
-      const isRoomHost = p.id === state.host;
-      const youTxt = (currentLang === 'ar') ? 'أنت' : ((currentLang === 'fr') ? 'vous' : 'you');
-      d.innerHTML = `<div class="avatar-badge" style="background: hsl(${Math.abs(p.id * 53)%360},65%,45%)">${(p.name||'P')[0]}</div>
-                     <div class="player-info">
-                       <div class="player-name">${p.name}${p.id===me.id?' (' + youTxt + ')':''}</div>
-                       <div class="player-role">${isRoomHost?'<svg class="ic"><use href="#i-crown"/></svg> ' + t.host : (p.online?'Online':'Offline')}</div>
-                     </div>`;
+      d.className = 'player-item';
+      d.innerHTML = `<div class="avatar-badge" style="background: hsl(${Math.abs(p.id * 53)%360},65%,45%)">${(p.name||'ل')[0]}</div>
+                     <div class="player-name">${p.name}${p.id===me.id?' (أنت)':''} ${p.id===state.host?'👑':''}</div>`;
       list.appendChild(d);
     });
   } else if (state.status === 'playing') {
     switchView('gameView');
     const r = state.round;
+    const mode = state.settings.mode || 'classic';
     const isGuesser = r.guesser === me.id;
-    $('roleText').textContent = isGuesser ? t.your_turn : `${t.current_guesser} ${getPlayerName(r.guesser)}`;
-    $('targetWord').textContent = r.word || 'ـ ـ ـ ـ ـ ـ';
-    $('targetWord').classList.toggle('masked', !r.word);
+    const isImpostor = r.impostor === me.id;
 
-    $('clueCard').classList.toggle('hidden', isGuesser || !r.active);
-    $('guessCard').classList.toggle('hidden', !isGuesser || !r.active);
+    if (mode === 'undercover') {
+      $('gameModeBanner').textContent = '🕵️ نمط المندس / الجاسوس';
+      $('roleText').textContent = isImpostor ? '🚨 أنت هو المندس! لا تدعهم يكتشفونك!' : '🔍 اكتب تلميحك واكتشف المندس بينكم';
+      $('targetWord').textContent = isImpostor ? '❓ [أنت المندس]' : r.word;
+    } else if (mode === 'taboo') {
+      $('gameModeBanner').textContent = '🚫 نمط الكلمات الممنوعة (Taboo)';
+      $('roleText').textContent = isGuesser ? '🎯 دورك للتخمين الآن' : `💡 المخمن: ${getPlayerName(r.guesser)}`;
+      $('targetWord').textContent = r.word || 'ـ ـ ـ ـ ـ ـ';
+    } else {
+      $('gameModeBanner').textContent = '🎯 النمط الكلاسيكي';
+      $('roleText').textContent = isGuesser ? '🎯 دورك للتخمين الآن' : `💡 المخمن: ${getPlayerName(r.guesser)}`;
+      $('targetWord').textContent = r.word || 'ـ ـ ـ ـ ـ ـ';
+    }
+
+    // عرض الكلمات الممنوعة للمساعدين في نمط Taboo
+    if (mode === 'taboo' && !isGuesser && r.taboo && r.taboo.length) {
+      $('tabooBox').classList.remove('hidden');
+      $('tabooWordsList').innerHTML = r.taboo.map(w => `<span class="taboo-tag">${w}</span>`).join('');
+    } else {
+      $('tabooBox').classList.add('hidden');
+    }
+
+    $('clueCard').classList.toggle('hidden', (mode !== 'undercover' && isGuesser) || !r.active);
+    $('guessCard').classList.toggle('hidden', (mode !== 'undercover' && !isGuesser) || !r.active);
 
     const banner = $('resultBanner');
     if (!r.active) {
       banner.classList.remove('hidden');
-      banner.className = `result-banner ${r.solved ? 'success' : 'timeout'}`;
-      banner.innerHTML = `<svg class="ic"><use href="#i-${r.solved ? 'check' : 'clock'}"/></svg><span>${r.solved ? t.guessed_correctly : t.time_up}</span>`;
+      banner.textContent = r.solved ? '🎉 تم التخمين بنجاح!' : '⏰ انتهى الوقت!';
+      banner.style.color = r.solved ? 'var(--success)' : 'var(--danger)';
+      if (r.solved) launchConfetti();
     } else {
       banner.classList.add('hidden');
     }
@@ -804,111 +658,63 @@ function render() {
     const cFeed = $('cluesFeed'); cFeed.replaceChildren();
     r.clues.forEach(c => {
       const item = document.createElement('div');
-      item.className = 'feed-item';
-      item.textContent = `${getPlayerName(c.by)}: ${c.text}`;
+      item.style.padding = '4px 0';
+      item.innerHTML = `<b>${getPlayerName(c.by)}:</b> ${c.text}`;
       cFeed.appendChild(item);
     });
 
     const gFeed = $('guessesFeed'); gFeed.replaceChildren();
     r.guesses.forEach(g => {
       const item = document.createElement('div');
-      item.className = `feed-item ${g.ok ? 'correct' : ''}`;
-      item.textContent = g.text;
+      item.style.padding = '4px 0';
+      item.textContent = `${g.text} ${g.ok ? '✅' : ''}`;
       gFeed.appendChild(item);
-    });
-
-    const sBox = $('liveScores'); sBox.replaceChildren();
-    [...state.players].sort((a,b)=>b.score-a.score).forEach((p, idx) => {
-      const row = document.createElement('div');
-      row.className = 'leader-row';
-      row.innerHTML = `<span class="rank-pill">${idx+1}</span><span style="flex:1; font-weight:700;">${p.name}</span><b style="color:var(--gold);">${p.score} ${t.pts}</b>`;
-      sBox.appendChild(row);
     });
 
     clearInterval(timerInterval);
     const end = Date.now() + r.left;
-    const totalMs = state.settings.timer * 1000;
     const updateTimer = () => {
       const rem = r.active ? Math.max(0, end - Date.now()) : 0;
       $('timerSecs').textContent = Math.ceil(rem / 1000);
-      $('timerProgress').style.strokeDashoffset = CIRCUMFERENCE * (1 - rem / totalMs);
     };
     updateTimer();
     if (r.active) timerInterval = setInterval(updateTimer, 250);
   } else if (state.status === 'ended') {
     switchView('endView');
     clearInterval(timerInterval);
+    launchConfetti();
     const sorted = [...state.players].sort((a,b)=>b.score-a.score);
-    const winner = sorted[0];
-    if (winner && winner.score > 0) {
-      $('winnerTitle').textContent = `${t.winner_is} ${winner.name}`;
-      $('winnerSub').textContent = `${winner.score} ${t.pts}`;
-    } else {
-      $('winnerTitle').textContent = t.no_winner;
-      $('winnerSub').textContent = "";
-    }
-
-    const podiumBox = $('podiumBox');
-    podiumBox.replaceChildren();
-    const slots = [
-      { p: sorted[1], cls: 'slot-2' },
-      { p: sorted[0], cls: 'slot-1' },
-      { p: sorted[2], cls: 'slot-3' }
-    ];
-    slots.forEach(({ p, cls }) => {
-      if (!p) return;
-      const col = document.createElement('div');
-      col.className = `podium-slot ${cls}`;
-      const av = document.createElement('div');
-      av.className = 'podium-avatar';
-      av.textContent = p.name.charAt(0);
-      av.style.background = `hsl(${Math.abs(p.id * 53)%360},65%,45%)`;
-      const bar = document.createElement('div');
-      bar.className = 'podium-bar';
-      bar.innerHTML = `<div style="font-weight: 700; font-size: 11px;">${p.name}</div><div style="font-weight: 800; color: var(--gold);">${p.score} ${t.pts}</div>`;
-      col.append(av, bar);
-      podiumBox.appendChild(col);
-    });
+    $('winnerTitle').textContent = `الفائز: ${sorted[0]?.name || 'لا أحد'}`;
+    $('winnerSub').textContent = `الرصيد: ${sorted[0]?.score || 0} نقطة`;
 
     const fBox = $('finalScores'); fBox.replaceChildren();
     sorted.forEach((p, idx) => {
       const row = document.createElement('div');
-      row.className = 'leader-row';
-      row.innerHTML = `<span class="rank-pill">${idx+1}</span><span style="flex:1; font-weight:700;">${p.name}</span><b style="color:var(--gold);">${p.score} ${t.pts}</b>`;
+      row.style.display = 'flex';
+      row.style.padding = '8px 0';
+      row.style.borderBottom = '1px solid var(--border)';
+      row.innerHTML = `<span style="width:24px; font-weight:800;">${idx+1}</span>
+                       <span style="flex:1; font-weight:700;">${p.name}</span>
+                       <b style="color:var(--gold);">${p.score} ن</b>`;
       fBox.appendChild(row);
     });
     $('restartBtn').classList.toggle('hidden', state.host !== me.id);
   }
 }
 
-function updateProfileUI(u) {
-  if (!u) return;
-  $('profName').textContent = u.name;
-  $('profId').textContent = `ID: ${u.id}`;
-  $('profAvatar').textContent = (u.name || 'P')[0];
-  $('profAvatar').style.background = `hsl(${Math.abs(u.id * 53)%360},65%,45%)`;
-  const s = u.stats || {};
-  $('profScore').textContent = s.score || 0;
-  $('profWins').textContent = s.wins || 0;
-  $('profGames').textContent = s.games || 0;
-  const rate = s.games ? Math.round((s.wins / s.games) * 100) : 0;
-  $('profWinRate').textContent = `${rate}%`;
-}
-
-function renderGlobalLeaderboard(list) {
+function renderLeaderboard(list) {
   const box = $('globalLeaderList');
   box.replaceChildren();
-  if (!list.length) {
-    box.innerHTML = '<p style="text-align:center; color:var(--text-muted); padding:20px;">لا توجد سجلات بعد</p>';
-    return;
-  }
   list.forEach(p => {
     const row = document.createElement('div');
-    row.className = 'leader-row';
-    row.innerHTML = `<span class="rank-pill">${p.rank}</span>
+    row.style.display = 'flex';
+    row.style.alignItems = 'center';
+    row.style.padding = '8px 0';
+    row.style.borderBottom = '1px solid var(--border)';
+    row.innerHTML = `<span style="width:24px; font-weight:800;">${p.rank}</span>
                      <span style="flex:1; font-weight:700;">${p.name}</span>
                      <span style="font-size:12px; color:var(--text-muted); margin-inline-end:8px;">🏆 ${p.wins}</span>
-                     <b style="color:var(--gold);">${p.score} ${I18N[currentLang].pts}</b>`;
+                     <b style="color:var(--gold);">${p.score} ن</b>`;
     box.appendChild(row);
   });
 }
@@ -919,11 +725,28 @@ function leave() {
   switchView('homeView');
 }
 
-$('langBtn').onclick = () => {
-  const langs = ['ar', 'en', 'fr'];
-  const next = langs[(langs.indexOf(currentLang) + 1) % langs.length];
-  setLanguage(next);
+$('createBtn').onclick = () => sendMsg({ type: 'create' });
+$('quickBtn').onclick = () => sendMsg({ type: 'quick_match' });
+$('joinBtn').onclick = () => {
+  const code = $('joinCodeIn').value.trim().toUpperCase();
+  if (code.length === 5) sendMsg({ type: 'join', code });
 };
+
+$('copyBtn').onclick = () => {
+  if (state?.code) { navigator.clipboard?.writeText(state.code); toast('تم نسخ رمز الغرفة'); }
+};
+$('shareBtn').onclick = () => {
+  if (!state?.code) return;
+  const shareText = `العب معي «شكون أنا؟» في تيليجرام!\nرمز الغرفة: ${state.code}`;
+  const url = `https://t.me/share/url?url=${encodeURIComponent('https://t.me/chkonanabot?start=' + state.code)}&text=${encodeURIComponent(shareText)}`;
+  if (tg?.openTelegramLink) tg.openTelegramLink(url);
+  else window.open(url, '_blank');
+};
+
+$('startBtn').onclick = () => sendMsg({ type: 'start' });
+$('restartBtn').onclick = () => sendMsg({ type: 'restart' });
+$('leaveBtn').onclick = leave;
+$('exitHomeBtn').onclick = leave;
 
 $('leaderBtn').onclick = () => {
   sendMsg({ type: 'get_leaderboard' });
@@ -937,29 +760,10 @@ $('profileBtn').onclick = () => {
 };
 $('closeProfileBtn').onclick = () => $('profileModal').classList.add('hidden');
 
-$('createBtn').onclick = () => sendMsg({ type: 'create' });
-$('joinBtn').onclick = () => {
-  const code = $('joinCodeIn').value.trim().toUpperCase();
-  if (code.length === 5) sendMsg({ type: 'join', code });
-};
-$('copyBtn').onclick = () => {
-  if (state?.code) { navigator.clipboard?.writeText(state.code); toast(I18N[currentLang].copied); }
-};
-$('shareBtn').onclick = () => {
-  if (!state?.code) return;
-  const shareText = `العب معي «شكون أنا؟» في تيليجرام!\nرمز الغرفة: ${state.code}`;
-  const url = `https://t.me/share/url?url=${encodeURIComponent('https://t.me/chkonanabot?start=' + state.code)}&text=${encodeURIComponent(shareText)}`;
-  if (tg?.openTelegramLink) tg.openTelegramLink(url);
-  else window.open(url, '_blank');
-};
-$('startBtn').onclick = () => sendMsg({ type: 'start' });
-$('restartBtn').onclick = () => sendMsg({ type: 'restart' });
-$('leaveBtn').onclick = leave;
-$('exitHomeBtn').onclick = leave;
-
-['selCat', 'selRounds', 'selTimer'].forEach(id => {
+['selMode', 'selCat', 'selRounds', 'selTimer'].forEach(id => {
   $(id).onchange = () => sendMsg({
     type: 'settings',
+    mode: $('selMode').value,
     category: $('selCat').value,
     rounds: Number($('selRounds').value),
     timer: Number($('selTimer').value)
@@ -975,7 +779,6 @@ $('sendGuessBtn').onclick = () => {
   if (val) { sendMsg({ type: 'guess', text: val }); $('guessInput').value = ''; }
 };
 
-setLanguage(currentLang);
 connectServer();
 </script>
 </body>
@@ -998,8 +801,9 @@ def is_guess_match(guess: str, target: str) -> bool:
         return False
     return g == t or strip_al(g) == strip_al(t)
 
-def clue_has_forbidden_word(clue: str, target: str) -> bool:
-    n_clue, n_target = norm(clue), norm(target)
+def clue_has_forbidden_word(clue: str, target: str, taboo_list=None) -> bool:
+    n_clue = norm(clue)
+    n_target = norm(target)
     if not n_clue or not n_target:
         return False
     if n_target in n_clue or strip_al(n_target) in n_clue:
@@ -1009,6 +813,11 @@ def clue_has_forbidden_word(clue: str, target: str) -> bool:
         sp = strip_al(p)
         if len(sp) >= 3 and sp in n_clue:
             return True
+    if taboo_list:
+        for tb in taboo_list:
+            n_tb = norm(tb)
+            if n_tb and n_tb in n_clue:
+                return True
     return False
 
 def verify_init_data(raw: str):
@@ -1053,7 +862,7 @@ class Room:
         self.code = code
         self.host = host
         self.status = "lobby"
-        self.settings = {"category": "general", "rounds": 5, "timer": 60}
+        self.settings = {"mode": "classic", "category": "general", "rounds": 5, "timer": 60}
         self.players = {}
         self.order = []
         self.conns = {}
@@ -1067,14 +876,23 @@ class Room:
         r = self.round
         rnd = None
         if r:
+            mode = self.settings.get("mode", "classic")
+            word_to_show = r["word"]
+            if mode == "undercover":
+                word_to_show = None if uid == r["impostor"] else r["word"]
+            elif mode == "classic" or mode == "taboo":
+                word_to_show = r["word"] if (not r["active"] or uid != r["guesser"]) else None
+
             rnd = {
                 "no": r["no"],
                 "total": self.settings["rounds"],
                 "guesser": r["guesser"],
+                "impostor": r.get("impostor"),
                 "active": r["active"],
                 "solved": r["solved"],
                 "left": max(0, int((r["end"] - time.time()) * 1000)),
-                "word": r["word"] if (not r["active"] or uid != r["guesser"]) else None,
+                "word": word_to_show,
+                "taboo": r.get("taboo", []),
                 "clues": r["clues"],
                 "guesses": r["guesses"],
             }
@@ -1108,14 +926,14 @@ class Room:
         self.conns[uid] = ws
         await self.broadcast()
 
-    def pick_word(self):
+    def pick_word_item(self):
         cat = self.settings["category"]
-        pool = [w for w in WORDS.get(cat, WORDS["general"]) if w not in self.used_words]
+        pool = [item for item in WORDS_DATA.get(cat, WORDS_DATA["general"]) if item["word"] not in self.used_words]
         if not pool:
             self.used_words.clear()
-            pool = WORDS.get(cat, WORDS["general"])
+            pool = WORDS_DATA.get(cat, WORDS_DATA["general"])
         chosen = random.choice(pool)
-        self.used_words.add(chosen)
+        self.used_words.add(chosen["word"])
         return chosen
 
     def start_round(self):
@@ -1135,11 +953,15 @@ class Room:
         if active_guesser not in self.conns:
             active_guesser = online_candidates[0]
 
-        word = self.pick_word()
+        impostor = random.choice(online_candidates) if self.settings.get("mode") == "undercover" else None
+        item = self.pick_word_item()
+
         self.round = {
             "no": self.no,
-            "word": word,
+            "word": item["word"],
+            "taboo": item.get("taboo", []),
             "guesser": active_guesser,
+            "impostor": impostor,
             "active": True,
             "solved": False,
             "end": time.time() + secs,
@@ -1189,22 +1011,19 @@ class Room:
         r = self.round
         if t == "settings":
             if uid != self.host or self.status != "lobby":
-                return "Cannot change settings now"
-            s = {
-                "category": data.get("category"),
-                "rounds": data.get("rounds"),
-                "timer": data.get("timer"),
-            }
-            if s["category"] in WORDS and s["rounds"] in ROUNDS and s["timer"] in TIMERS:
-                self.settings = s
-                await self.broadcast()
+                return "لا يمكنك تغيير الإعدادات الآن"
+            self.settings["mode"] = data.get("mode", "classic")
+            self.settings["category"] = data.get("category", "general")
+            self.settings["rounds"] = data.get("rounds", 5)
+            self.settings["timer"] = data.get("timer", 60)
+            await self.broadcast()
             return None
 
         if t == "start":
             if uid != self.host or self.status != "lobby":
-                return "Only host can start"
+                return "فقط المضيف يمكنه البدء"
             if len([p for p in self.order if p in self.conns]) < 2:
-                return "Need at least 2 players"
+                return "يلزم لاعبين على الأقل للبدء"
             self.status = "playing"
             self.no = 0
             self.used_words.clear()
@@ -1216,7 +1035,7 @@ class Room:
 
         if t == "restart":
             if uid != self.host or self.status != "ended":
-                return "Only host can restart"
+                return "فقط المضيف يمكنه إعادة اللعب"
             self.status = "lobby"
             self.round = None
             self.no = 0
@@ -1227,26 +1046,33 @@ class Room:
             return None
 
         if t == "clue":
-            if self.status != "playing" or not r or not r["active"] or uid == r["guesser"]:
-                return "Not allowed now"
+            if self.status != "playing" or not r or not r["active"]:
+                return "ليس متاحاً لك الآن"
+            mode = self.settings.get("mode", "classic")
+            if mode != "undercover" and uid == r["guesser"]:
+                return "المخمن لا يقدم تلميحاً"
             text = str(data.get("text", "")).strip()[:80]
             if not text:
-                return "Empty clue"
-            if clue_has_forbidden_word(text, r["word"]):
-                return "Cannot use target word in clue"
+                return "يرجى كتابة نص"
+            taboo = r.get("taboo", []) if mode == "taboo" else []
+            if clue_has_forbidden_word(text, r["word"], taboo):
+                return "ممنوع ذكر الكلمة أو إحدى الكلمات المحظورة في التلميح!"
             r["clues"].append({"by": uid, "text": text})
             await self.broadcast()
             return None
 
         if t == "guess":
-            if self.status != "playing" or not r or not r["active"] or uid != r["guesser"]:
-                return "Not your turn to guess"
+            if self.status != "playing" or not r or not r["active"]:
+                return "غير متاح الآن"
+            mode = self.settings.get("mode", "classic")
+            if mode != "undercover" and uid != r["guesser"]:
+                return "ليس دورك في التخمين"
             text = str(data.get("text", "")).strip()[:40]
             n = norm(text)
             if not n:
-                return "Invalid guess"
+                return "إجابة غير صالحة"
             if n in r["gn"]:
-                return "Already guessed"
+                return "تمت تجربتها مسبقاً"
             r["gn"].add(n)
             ok = is_guess_match(text, r["word"])
             r["guesses"].append({"text": text, "ok": ok})
@@ -1302,9 +1128,17 @@ async def ws_handler(request):
             if t in ("clue", "guess"):
                 now = time.time()
                 if now - last_act < 0.35:
-                    await send(ws, err("Slow down"))
+                    await send(ws, err("تمهل قليلاً"))
                     continue
                 last_act = now
+
+            if t == "reaction":
+                emoji = data.get("emoji", "🔥")
+                if room:
+                    for p_ws in room.conns.values():
+                        if p_ws is not ws:
+                            await send(p_ws, {"type": "reaction", "emoji": emoji})
+                continue
 
             if t == "get_leaderboard":
                 await send(ws, {"type": "leaderboard", "data": get_leaderboard_data()})
@@ -1334,7 +1168,7 @@ async def ws_handler(request):
                             pass
                 if not user:
                     rnd_id = random.randint(100000, 999999)
-                    user = {"id": rnd_id, "name": f"Player {str(rnd_id)[-3:]}"}
+                    user = {"id": rnd_id, "name": f"لاعب {str(rnd_id)[-3:]}"}
 
                 uid, name = user["id"], user["name"]
                 s = STATS.get(str(uid), {"score": 0, "wins": 0, "games": 0})
@@ -1344,6 +1178,19 @@ async def ws_handler(request):
             elif uid is None:
                 continue
 
+            elif t == "quick_match":
+                target = None
+                for r in ROOMS.values():
+                    if r.status == "lobby" and len(r.players) < MAX_PLAYERS:
+                        target = r
+                        break
+                if not target:
+                    code = new_code()
+                    target = ROOMS[code] = Room(code, uid)
+                await detach(room, uid, ws)
+                room = target
+                await room.join(uid, name, ws)
+
             elif t in ("create", "join"):
                 if t == "create":
                     code = new_code()
@@ -1351,12 +1198,10 @@ async def ws_handler(request):
                 else:
                     target = ROOMS.get(str(data.get("code", "")).upper().strip())
                     if target is None:
-                        await send(ws, err("Invalid room code"))
+                        await send(ws, err("رمز الغرفة غير صحيح"))
                         continue
-                    if uid not in target.players and (
-                        target.status != "lobby" or len(target.players) >= MAX_PLAYERS
-                    ):
-                        await send(ws, err("Room full or game in progress"))
+                    if uid not in target.players and (target.status != "lobby" or len(target.players) >= MAX_PLAYERS):
+                        await send(ws, err("الغرفة ممتلئة أو جارية"))
                         continue
                 await detach(room, uid, ws)
                 room = target
@@ -1370,7 +1215,7 @@ async def ws_handler(request):
                 try:
                     error = await room.handle(uid, t, data)
                 except Exception:
-                    error = "Error processing request"
+                    error = "خطأ في معالجة الطلب"
                 if error:
                     await send(ws, err(error))
     finally:
@@ -1403,7 +1248,7 @@ def get_play_keyboard():
         "inline_keyboard": [
             [
                 {
-                    "text": "🎮 العب الآن • Play • Jouer",
+                    "text": "🎮 العب الآن • Play Game",
                     "web_app": {"url": APP_URL}
                 }
             ]
@@ -1428,21 +1273,17 @@ async def handle_tg_message(session, msg):
         await send_tg_msg(
             session,
             chat_id,
-            "مرحباً بك في منصة «شكون أنا؟» 🎮\n"
-            "Bienvenue sur «Qui suis-je ?»\n"
-            "Welcome to «Who Am I?»\n\n"
-            "اضغط على الزر الشفاف بالأسفل لفتح اللعبة وبدء التحدي مباشرة!",
+            "مرحباً بك في منصة «شكون أنا؟» 🎮\n\n"
+            "اضغط على الزر الشفاف بالأسفل لبدء التحدي واللعب مباشرة مع أصدقائك!",
             reply_markup=get_play_keyboard()
         )
     elif text.startswith("/stats") and is_owner:
-        total_p = len(STATS)
-        active_r = len(ROOMS)
         await send_tg_msg(
             session,
             chat_id,
             f"👑 إحصائيات المالك ({OWNER_USERNAME}):\n"
-            f"- إجمالي اللاعبين المسجلين: {total_p}\n"
-            f"- الغرف النشطة الآن: {active_r}\n"
+            f"- إجمالي اللاعبين المسجلين: {len(STATS)}\n"
+            f"- الغرف النشطة الآن: {len(ROOMS)}\n"
             f"- إجمالي مستخدمي البوت: {len(USERS)}"
         )
     elif text.startswith("/broadcast") and is_owner:
@@ -1458,15 +1299,6 @@ async def handle_tg_message(session, msg):
                 except Exception:
                     pass
             await send_tg_msg(session, chat_id, f"تم إرسال الإذاعة إلى {sent} مستخدماً.")
-        else:
-            await send_tg_msg(session, chat_id, "طريقة الاستخدام: /broadcast نص الرسالة")
-    elif text.startswith("/help"):
-        await send_tg_msg(
-            session,
-            chat_id,
-            "اضغط على الزر الشفاف أسفل الرسالة للعب مباشرة! 👇",
-            reply_markup=get_play_keyboard()
-        )
 
 async def bot_polling():
     offset = 0
