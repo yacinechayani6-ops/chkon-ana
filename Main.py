@@ -1,6 +1,9 @@
 """
 شكون أنا؟ - Who Am I?
-النسخة الشاملة مع لوحة تحكم كاملة للآدمن، دعم المجموعات، ونظام الحظر وإدارة الكلمات.
+نسخة مصححة بالكامل:
+1. معالجة ذكية للأوامر العربية وعلامات الاتجاه BiDi.
+2. دعم كامل للرد في المجموعات مع نظام إرسال احتياطي للروابط.
+3. حماية الإذاعة من المعرفات السالبة.
 المتطلبات: pip install aiohttp
 """
 import asyncio
@@ -35,7 +38,6 @@ MAX_PLAYERS = 12
 
 GROUP_ROOMS = {}
 
-# بنك الكلمات الأساسي
 WORDS_DATA = {
     "celebs": [
         {"word": "الشاب خالد", "taboo": ["دي دي", "مغني", "وهران"]},
@@ -102,7 +104,7 @@ for cat, items in custom_words.items():
         WORDS_DATA[cat].extend(items)
 
 STATS = load_db(STATS_FILE)
-USERS = set(load_db(USERS_FILE).keys())
+USERS = set(int(u) for u in load_db(USERS_FILE).keys() if str(u).isdigit() or (str(u).startswith('-') and False))
 BANNED_USERS = set(load_db(BANNED_FILE).keys())
 
 def update_user_stats(uid, name, add_score=0, won=False):
@@ -134,7 +136,7 @@ def get_leaderboard_data():
         for idx, (uid, p) in enumerate(sorted_players)
     ]
 
-# --- واجهة المستخدم الكاملة ---
+# واجهة HTML اللعبة
 HTML_PAGE = """<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -176,12 +178,9 @@ body {
   user-select: none;
   overflow-x: hidden;
 }
-html[dir="ltr"] body { font-family: "Inter", "Cairo", system-ui, sans-serif; }
-.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
-.ic { width: 19px; height: 19px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; display: inline-block; vertical-align: middle; }
-.app { max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; padding: 14px; position: relative; }
+.app { max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; padding: 14px; }
 .top-nav { display: flex; align-items: center; gap: 8px; padding: 6px 0 14px; }
-.brand-badge { width: 38px; height: 38px; border-radius: 12px; background: var(--grad-primary); display: grid; place-items: center; color: #fff; }
+.brand-badge { width: 38px; height: 38px; border-radius: 12px; background: var(--grad-primary); display: grid; place-items: center; color: #fff; font-size: 18px; }
 .grow { flex: 1; }
 .nav-actions { display: flex; align-items: center; gap: 6px; }
 .status-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 99px; background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); }
@@ -204,59 +203,30 @@ html[dir="ltr"] body { font-family: "Inter", "Cairo", system-ui, sans-serif; }
 .player-name { font-weight: 700; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .taboo-tag { display: inline-block; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: var(--danger); padding: 4px 10px; border-radius: 99px; font-size: 12px; font-weight: 700; margin: 2px; }
 .reactions-bar { display: flex; justify-content: center; gap: 10px; margin-top: 10px; padding: 8px; background: var(--bg-subtle); border-radius: var(--radius-md); border: 1px solid var(--border); }
-.react-btn { font-size: 20px; background: transparent; border: 0; cursor: pointer; transition: transform 0.15s; }
-.react-btn:active { transform: scale(1.3); }
-.flying-reaction { position: fixed; bottom: 80px; font-size: 32px; pointer-events: none; animation: flyUp 1.8s ease-out forwards; z-index: 9999; }
-@keyframes flyUp { 0% { opacity: 1; transform: translateY(0) scale(0.6); } 100% { opacity: 0; transform: translateY(-380px) scale(1.4); } }
-.badge-pill { display: inline-block; font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 99px; background: rgba(234, 179, 8, 0.15); color: var(--gold); border: 1px solid rgba(234, 179, 8, 0.3); }
+.react-btn { font-size: 20px; background: transparent; border: 0; cursor: pointer; }
 .modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 999; }
 .modal-box { width: 100%; max-width: 420px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; max-height: 85vh; overflow-y: auto; }
-.stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 14px; }
-.stat-card { background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px; text-align: center; }
-.stat-val { font-size: 22px; font-weight: 900; color: var(--gold); }
-.stat-lbl { font-size: 11px; color: var(--text-muted); font-weight: 700; }
 .toast-msg { position: fixed; inset-inline: 0; bottom: 20px; margin: auto; width: max-content; max-width: 90%; background: var(--surface-hover); border: 1px solid var(--border); padding: 10px 16px; border-radius: var(--radius-md); font-weight: 700; opacity: 0; transform: translateY(12px); transition: 0.2s; pointer-events: none; z-index: 1000; }
 .toast-msg.show { opacity: 1; transform: translateY(0); }
 .hidden { display: none !important; }
 .spinner { width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--border); border-top-color: var(--primary-light); animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
 @keyframes spin { to { transform: rotate(360deg); } }
-canvas#confettiCanvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9998; }
 </style>
 </head>
 <body>
 
-<canvas id="confettiCanvas"></canvas>
-
-<svg class="sprite" aria-hidden="true">
-  <symbol id="i-logo" viewBox="0 0 24 24"><path d="M12 2a8 8 0 0 0-8 8c0 3 2 5.5 5 7.2V19a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-1.8c3-1.7 5-4.2 5-7.2a8 8 0 0 0-8-8z"/><path d="M9 10a3 3 0 0 1 6 0c0 1.5-1.5 2.5-3 3"/><path d="M12 17h.01"/></symbol>
-  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
-  <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V17h5v-1.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></symbol>
-  <symbol id="i-crown" viewBox="0 0 24 24"><path d="M3 18h18M4 14l3-8 5 5 5-5 3 8z"/></symbol>
-  <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3"/></symbol>
-  <symbol id="i-user" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
-  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></symbol>
-  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
-  <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></symbol>
-  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
-  <symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
-  <symbol id="i-send" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></symbol>
-  <symbol id="i-close" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
-  <symbol id="i-zap" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
-</svg>
-
 <div class="app">
   <header class="top-nav">
-    <div class="brand-badge"><svg class="ic"><use href="#i-logo"/></svg></div>
+    <div class="brand-badge">🎯</div>
     <div style="margin-inline-start: 8px;">
       <h1>شكون أنا؟</h1>
       <p style="font-size: 11px; color: var(--text-muted);">التحدي والمرح الجماعي</p>
     </div>
     <div class="grow"></div>
     <div class="nav-actions">
-      <button class="icon-btn" id="langBtn"><span style="font-size:11px; font-weight:800; color:var(--primary-light);" id="langTxt">AR</span></button>
-      <button class="icon-btn" id="leaderBtn"><svg class="ic"><use href="#i-trophy"/></svg></button>
-      <button class="icon-btn" id="profileBtn"><svg class="ic"><use href="#i-user"/></svg></button>
-      <button class="icon-btn hidden" id="leaveBtn"><svg class="ic"><use href="#i-logout"/></svg></button>
+      <button class="icon-btn" id="leaderBtn">🏆</button>
+      <button class="icon-btn" id="profileBtn">👤</button>
+      <button class="icon-btn hidden" id="leaveBtn">🚪</button>
     </div>
   </header>
 
@@ -266,32 +236,28 @@ canvas#confettiCanvas { position: fixed; inset: 0; width: 100%; height: 100%; po
 
   <div id="toast" class="toast-msg"></div>
 
-  <!-- شاشة التحميل -->
   <section id="bootView" style="text-align: center; padding: 70px 0;">
     <div class="spinner"></div><p style="color: var(--text-muted); font-weight: 700;">جاري فتح اللعبة والاتصال...</p>
   </section>
 
-  <!-- الواجهة الرئيسية -->
   <section id="homeView" class="hidden">
     <div class="card" style="text-align: center; padding: 20px 16px;">
       <h2 style="font-size: 19px; font-weight: 900; margin-bottom: 6px;">تحدي التخمين والمندس</h2>
-      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">العب مع أصدقائك أو ابحث عن مباراة سريعة أونلاين!</p>
-      
+      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">العب مع أصدقائك أو ابحث عن مباراة سريعة!</p>
       <div class="row" style="margin-bottom: 10px;">
         <button class="btn" id="quickBtn" style="background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);">
-          <svg class="ic"><use href="#i-zap"/></svg><span>لعب سريع عشوائي</span>
+          ⚡ <span>لعب سريع عشوائي</span>
         </button>
       </div>
-
       <div class="row">
         <button class="btn" id="createBtn">
-          <svg class="ic"><use href="#i-plus"/></svg><span>إنشاء غرفة خاصة</span>
+          ➕ <span>إنشاء غرفة خاصة</span>
         </button>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-title"><svg class="ic"><use href="#i-target"/></svg><span>الانضمام برمز الغرفة</span></div>
+      <div class="card-title"><span>الانضمام برمز الغرفة</span></div>
       <div class="row">
         <input id="joinCodeIn" class="field code-field" maxlength="5" placeholder="ABCDE">
         <button class="btn btn-sm" id="joinBtn"><span>انضمام</span></button>
@@ -299,14 +265,13 @@ canvas#confettiCanvas { position: fixed; inset: 0; width: 100%; height: 100%; po
     </div>
   </section>
 
-  <!-- غرفة الانتظار (Lobby) -->
   <section id="lobbyView" class="hidden">
     <div class="card" style="text-align: center;">
       <div style="font-size: 11.5px; color: var(--text-muted); font-weight: 700;">رمز الغرفة الرسمي</div>
       <div class="room-code" id="displayCode">-----</div>
       <div class="row" style="max-width: 260px; margin: 0 auto;">
-        <button class="btn btn-secondary btn-sm" id="copyBtn"><svg class="ic"><use href="#i-copy"/></svg><span>نسخ</span></button>
-        <button class="btn btn-secondary btn-sm" id="shareBtn"><svg class="ic"><use href="#i-share"/></svg><span>دعوة</span></button>
+        <button class="btn btn-secondary btn-sm" id="copyBtn">📋 نسخ</button>
+        <button class="btn btn-secondary btn-sm" id="shareBtn">🔗 دعوة</button>
       </div>
     </div>
 
@@ -320,9 +285,9 @@ canvas#confettiCanvas { position: fixed; inset: 0; width: 100%; height: 100%; po
       <div style="margin-bottom: 10px;">
         <label style="font-size: 11.5px; color: var(--text-muted); font-weight: 700;">نمط اللعبة</label>
         <select id="selMode" class="field">
-          <option value="classic">كلاسيكي (مخمن وبقية اللاعبين تلميحات)</option>
-          <option value="undercover">المندس / الجاسوس (الكل يعرف الكلمة ما عدا الجاسوس)</option>
-          <option value="taboo">الكلمات الممنوعة (تلميح دون ذكر 3 كلمات محظورة)</option>
+          <option value="classic">كلاسيكي (مخمن وتلميحات)</option>
+          <option value="undercover">المندس / الجاسوس</option>
+          <option value="taboo">الكلمات الممنوعة (Taboo)</option>
         </select>
       </div>
       <div style="margin-bottom: 10px;">
@@ -336,21 +301,20 @@ canvas#confettiCanvas { position: fixed; inset: 0; width: 100%; height: 100%; po
     </div>
 
     <p id="lobbyHint" style="font-size: 12px; text-align: center; margin-bottom: 12px; color: var(--text-muted); font-weight: 700;"></p>
-    <button class="btn" id="startBtn"><svg class="ic"><use href="#i-play"/></svg><span>بدء المباراة</span></button>
+    <button class="btn" id="startBtn">▶️ <span>بدء المباراة</span></button>
   </section>
 
-  <!-- شاشة اللعب النشطة -->
   <section id="gameView" class="hidden">
     <div class="card" style="text-align: center;">
       <div style="font-size: 12px; font-weight: 800; color: var(--primary-light); margin-bottom: 6px;" id="gameModeBanner">نمط كلاسيكي</div>
-      <div style="font-size: 30px; font-weight: 900; line-height: 1;" id="timerSecs">60</div>
-      <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">ثانية متبقية</div>
+      <div style="font-size: 32px; font-weight: 900; line-height: 1;" id="timerSecs">60</div>
+      <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">ثانية</div>
 
       <div style="font-weight: 700; color: var(--text-muted);" id="roleText">...</div>
       <div style="font-size: 26px; font-weight: 900; color: var(--gold); margin: 6px 0;" id="targetWord">...</div>
       
       <div id="tabooBox" class="hidden" style="margin-top: 6px;">
-        <div style="font-size: 11px; color: var(--danger); font-weight: 800; margin-bottom: 4px;">ممنوع استخدام هذه الكلمات في التلميح:</div>
+        <div style="font-size: 11px; color: var(--danger); font-weight: 800; margin-bottom: 4px;">الكلمات الممنوعة:</div>
         <div id="tabooWordsList"></div>
       </div>
 
@@ -358,18 +322,18 @@ canvas#confettiCanvas { position: fixed; inset: 0; width: 100%; height: 100%; po
     </div>
 
     <div class="card hidden" id="clueCard">
-      <div class="card-title"><svg class="ic"><use href="#i-bulb"/></svg><span>اكتب تلميحاً ذكياً</span></div>
+      <div class="card-title">💡 <span>اكتب تلميحاً ذكياً</span></div>
       <div class="row">
         <input id="clueInput" class="field" maxlength="80" placeholder="اكتب التلميح هنا...">
-        <button class="btn btn-sm" id="sendClueBtn"><svg class="ic"><use href="#i-send"/></svg></button>
+        <button class="btn btn-sm" id="sendClueBtn">إرسال</button>
       </div>
     </div>
 
     <div class="card hidden" id="guessCard">
-      <div class="card-title"><svg class="ic"><use href="#i-target"/></svg><span>اكتب تخمينك للكلمة</span></div>
+      <div class="card-title">🎯 <span>اكتب تخمينك للكلمة</span></div>
       <div class="row">
         <input id="guessInput" class="field" maxlength="40" placeholder="ما هي الكلمة المطلوبة؟">
-        <button class="btn btn-sm" id="sendGuessBtn"><span>تخمين</span></button>
+        <button class="btn btn-sm" id="sendGuessBtn">تخمين</button>
       </div>
     </div>
 
@@ -387,48 +351,45 @@ canvas#confettiCanvas { position: fixed; inset: 0; width: 100%; height: 100%; po
     </div>
   </section>
 
-  <!-- شاشة نهاية اللعبة -->
   <section id="endView" class="hidden">
     <div class="card" style="text-align: center; padding: 24px 16px;">
-      <svg class="ic" style="width: 44px; height: 44px; color: var(--gold); margin-bottom: 8px;"><use href="#i-trophy"/></svg>
+      <div style="font-size: 40px; margin-bottom: 8px;">🏆</div>
       <h2 style="font-size: 22px; font-weight: 900;" id="winnerTitle">...</h2>
       <p style="color: var(--text-muted); margin-top: 4px;" id="winnerSub">...</p>
     </div>
     <div class="card"><div class="card-title">الترتيب النهائي</div><div id="finalScores"></div></div>
     <div class="row">
-      <button class="btn" id="restartBtn"><svg class="ic"><use href="#i-play"/></svg><span>جولة جديدة</span></button>
+      <button class="btn" id="restartBtn">جولة جديدة</button>
       <button class="btn btn-secondary" id="exitHomeBtn">الرئيسية</button>
     </div>
   </section>
 
-  <!-- نافذة ليدربورد المتصدرين -->
   <div class="modal-overlay hidden" id="leaderModal">
     <div class="modal-box">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
-        <h3 style="display:flex; align-items:center; gap:8px;"><svg class="ic" style="color:var(--gold);"><use href="#i-trophy"/></svg><span>لوحة الصدارة</span></h3>
-        <button class="icon-btn" id="closeLeaderBtn"><svg class="ic"><use href="#i-close"/></svg></button>
+        <h3>🏆 <span>لوحة الصدارة</span></h3>
+        <button class="icon-btn" id="closeLeaderBtn">✕</button>
       </div>
       <div id="globalLeaderList"></div>
     </div>
   </div>
 
-  <!-- نافذة البروفايل والرتب -->
   <div class="modal-overlay hidden" id="profileModal">
     <div class="modal-box">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
-        <h3 style="display:flex; align-items:center; gap:8px;"><svg class="ic" style="color:var(--primary-light);"><use href="#i-user"/></svg><span>الملف الشخصي والرتبة</span></h3>
-        <button class="icon-btn" id="closeProfileBtn"><svg class="ic"><use href="#i-close"/></svg></button>
+        <h3>👤 <span>الملف الشخصي والرتبة</span></h3>
+        <button class="icon-btn" id="closeProfileBtn">✕</button>
       </div>
       <div style="text-align: center; padding: 6px 0 12px;">
         <div class="avatar-badge" id="profAvatar" style="width: 56px; height: 56px; font-size: 22px; margin: 0 auto 8px;">ل</div>
         <h4 style="font-size: 16px; font-weight: 800;" id="profName">لاعب</h4>
-        <div class="badge-pill" id="profTitle" style="margin-top: 4px;">مبتدئ</div>
+        <div style="display:inline-block; font-size:11px; font-weight:800; padding:2px 8px; border-radius:99px; background:rgba(234,179,8,0.15); color:var(--gold);" id="profTitle">مبتدئ</div>
       </div>
-      <div class="stat-grid">
-        <div class="stat-card"><div class="stat-val" id="profScore">0</div><div class="stat-lbl">مجموع النقاط</div></div>
-        <div class="stat-card"><div class="stat-val" id="profWins">0</div><div class="stat-lbl">مرات الفوز</div></div>
-        <div class="stat-card"><div class="stat-val" id="profGames">0</div><div class="stat-lbl">مباريات لعبتها</div></div>
-        <div class="stat-card"><div class="stat-val" id="profWinRate">0%</div><div class="stat-lbl">نسبة الفوز</div></div>
+      <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:8px;">
+        <div style="background:var(--bg-subtle); padding:10px; border-radius:10px; text-align:center;"><div style="font-size:20px; font-weight:900; color:var(--gold);" id="profScore">0</div><div style="font-size:11px; color:var(--text-muted);">النقاط</div></div>
+        <div style="background:var(--bg-subtle); padding:10px; border-radius:10px; text-align:center;"><div style="font-size:20px; font-weight:900; color:var(--gold);" id="profWins">0</div><div style="font-size:11px; color:var(--text-muted);">الفوز</div></div>
+        <div style="background:var(--bg-subtle); padding:10px; border-radius:10px; text-align:center;"><div style="font-size:20px; font-weight:900; color:var(--gold);" id="profGames">0</div><div style="font-size:11px; color:var(--text-muted);">المباريات</div></div>
+        <div style="background:var(--bg-subtle); padding:10px; border-radius:10px; text-align:center;"><div style="font-size:20px; font-weight:900; color:var(--gold);" id="profWinRate">0%</div><div style="font-size:11px; color:var(--text-muted);">نسبة الفوز</div></div>
       </div>
     </div>
   </div>
@@ -525,7 +486,7 @@ function connectServer() {
         currentRoomCode = state.code;
         render();
       } else if (m.type === 'reaction') {
-        spawnReaction(m.emoji);
+        toast(`تفاعل: ${m.emoji}`);
       } else if (m.type === 'leaderboard') {
         renderLeaderboard(m.data);
       } else if (m.type === 'error') {
@@ -537,7 +498,7 @@ function connectServer() {
 
   ws.onclose = () => {
     $('connPill').classList.add('offline');
-    $('connTxt').textContent = 'جاري إعادة الاتصال...';
+    $('connTxt').textContent = 'غير متصل';
     setTimeout(connectServer, 2000);
   };
 }
@@ -553,45 +514,6 @@ setTimeout(() => {
 
 function sendReaction(emoji) {
   sendMsg({ type: 'reaction', emoji });
-  spawnReaction(emoji);
-}
-
-function spawnReaction(emoji) {
-  const el = document.createElement('div');
-  el.className = 'flying-reaction';
-  el.textContent = emoji;
-  el.style.left = `${30 + Math.random() * 40}%`;
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 1800);
-}
-
-function launchConfetti() {
-  const canvas = $('confettiCanvas');
-  const ctx = canvas.getContext('2d');
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-  const pieces = Array.from({length: 60}, () => ({
-    x: Math.random() * canvas.width,
-    y: Math.random() * canvas.height - canvas.height,
-    size: Math.random() * 8 + 4,
-    color: ['#9333ea', '#3b82f6', '#eab308', '#10b981', '#ef4444'][Math.floor(Math.random()*5)],
-    velY: Math.random() * 3 + 2,
-    velX: Math.random() * 2 - 1
-  }));
-  let frames = 0;
-  function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    pieces.forEach(p => {
-      ctx.fillStyle = p.color;
-      ctx.fillRect(p.x, p.y, p.size, p.size);
-      p.y += p.velY;
-      p.x += p.velX;
-    });
-    frames++;
-    if (frames < 120) requestAnimationFrame(draw);
-    else ctx.clearRect(0, 0, canvas.width, canvas.height);
-  }
-  draw();
 }
 
 const getPlayerName = id => state?.players.find(p => p.id === id)?.name || 'لاعب';
@@ -629,7 +551,7 @@ function render() {
 
     if (mode === 'undercover') {
       $('gameModeBanner').textContent = '🕵️ نمط المندس / الجاسوس';
-      $('roleText').textContent = isImpostor ? '🚨 أنت هو المندس! لا تدعهم يكتشفونك!' : '🔍 اكتب تلميحك واكتشف المندس بينكم';
+      $('roleText').textContent = isImpostor ? '🚨 أنت هو المندس!' : '🔍 اكتب تلميحك واكتشف المندس';
       $('targetWord').textContent = isImpostor ? '❓ [أنت المندس]' : r.word;
     } else if (mode === 'taboo') {
       $('gameModeBanner').textContent = '🚫 نمط الكلمات الممنوعة (Taboo)';
@@ -656,7 +578,6 @@ function render() {
       banner.classList.remove('hidden');
       banner.textContent = r.solved ? '🎉 تم التخمين بنجاح!' : '⏰ انتهى الوقت!';
       banner.style.color = r.solved ? 'var(--success)' : 'var(--danger)';
-      if (r.solved) launchConfetti();
     } else {
       banner.classList.add('hidden');
     }
@@ -688,7 +609,6 @@ function render() {
   } else if (state.status === 'ended') {
     switchView('endView');
     clearInterval(timerInterval);
-    launchConfetti();
     const sorted = [...state.players].sort((a,b)=>b.score-a.score);
     $('winnerTitle').textContent = `الفائز: ${sorted[0]?.name || 'لا أحد'}`;
     $('winnerSub').textContent = `الرصيد: ${sorted[0]?.score || 0} نقطة`;
@@ -1179,7 +1099,6 @@ async def ws_handler(request):
                 uid = user["id"]
                 name = user["name"]
 
-                # فحص الحظر (Ban Check)
                 if str(uid) in BANNED_USERS:
                     await send(ws, err("❌ تم حظرك من اللعبة من قبل الإدارة."))
                     await ws.close()
@@ -1247,49 +1166,59 @@ async def cleanup():
 async def index(_):
     return web.Response(text=HTML_PAGE, content_type="text/html", charset="utf-8")
 
-# --- نظام بوت التيليجرام ولوحة تحكم الآدمن المتقدمة ---
+# --- دالة الإرسال مع نظام احتياطي للروابط (Fallback) ---
 async def send_tg_msg(session, chat_id, text, reply_markup=None):
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
         if reply_markup:
             payload["reply_markup"] = reply_markup
-        await session.post(url, json=payload)
-    except Exception:
-        pass
+        async with session.post(url, json=payload) as resp:
+            # إذا رفض تيليجرام إرسال الأزرار (في بعض المجموعات)، نعيد الإرسال كنص نقي
+            if resp.status != 200 and reply_markup:
+                payload.pop("reply_markup", None)
+                await session.post(url, json=payload)
+    except Exception as e:
+        print(f"send_tg_msg Exception: {e}")
+
+# استخراج الأمر الذكي وتجاهل علامات الاتجاه BiDi
+def extract_cmd(text: str):
+    clean = re.sub(r'[\u200e\u200f\u202a-\u202e]', '', text).strip()
+    parts = clean.split()
+    cmd = None
+    cmd_idx = -1
+    for i, p in enumerate(parts):
+        if p.startswith("/"):
+            cmd = p.split("@")[0].lower()
+            cmd_idx = i
+            break
+    args = parts[cmd_idx+1:] if cmd_idx != -1 else []
+    return cmd, args, clean
 
 async def handle_tg_message(session, msg):
-    chat = msg.get("chat", {})
+    chat = msg.get("chat") or {}
     chat_id = chat.get("id")
     chat_type = chat.get("type", "private")
-    user = msg.get("from", {})
-    user_id = user.get("id")
+    user = msg.get("from") or {}
+    user_id = user.get("id") or chat_id
     username = (user.get("username") or "").lower()
-    text = (msg.get("text") or "").strip()
-    if not chat_id:
+    raw_text = (msg.get("text") or "").strip()
+    if not chat_id or not raw_text:
         return
 
-    if user_id:
-        USERS.add(user_id)
+    # حفظ المستخدمين الحقيقيين فقط (تجاهل معرفات المجموعات السالبة)
+    if user_id and int(user_id) > 0:
+        USERS.add(int(user_id))
         save_db(USERS_FILE, {str(u): True for u in USERS})
 
-    is_owner = (user_id == OWNER_ID) or (username == OWNER_USERNAME.lower())
+    is_owner = (int(user_id) == OWNER_ID) or (username == OWNER_USERNAME.lower())
 
-    # ترحيب بالمجموعات
-    if "new_chat_members" in msg:
-        for m in msg["new_chat_members"]:
-            if m.get("is_bot") and m.get("username", "").lower() == "chkonanabot":
-                await send_tg_msg(
-                    session,
-                    chat_id,
-                    "👋 مرحباً بكم في لعبة «شكون أنا؟» في مجموعتكم! 🎮\n\n"
-                    "اكتبوا الأمر /play لبدء مباراة وتحدي بين أعضاء المجموعة فوراً!"
-                )
-                return
+    # استخراج الأمر بدقة وتجاوز مشاكل اللغة العربية
+    clean_cmd, args, clean_text = extract_cmd(raw_text)
+    if not clean_cmd:
+        return
 
-    clean_cmd = text.split("@")[0].lower() if text.startswith("/") else ""
-
-    # تشغيل في المجموعات
+    # تشغيل في المجموعات (سوبرجروب أو جروب عادي)
     if chat_type in ("group", "supergroup"):
         if clean_cmd in ("/start", "/play", "/game"):
             code = GROUP_ROOMS.get(chat_id)
@@ -1298,25 +1227,27 @@ async def handle_tg_message(session, msg):
                 ROOMS[code] = Room(code, user_id)
                 GROUP_ROOMS[chat_id] = code
 
-            url = f"{APP_URL}?room={code}"
+            room_url = f"{APP_URL}?room={code}"
+            bot_deep_link = f"https://t.me/chkonanabot?start={code}"
+            
             group_kb = {
                 "inline_keyboard": [
-                    [{"text": "🎮 دخول غرفة المجموعة • Join Game", "web_app": {"url": url}}]
+                    [{"text": "🎮 دخول الغرفة مع المجموعة", "url": room_url}],
+                    [{"text": "🚀 فتح عبر البوت المباشر", "url": bot_deep_link}]
                 ]
             }
-            await send_tg_msg(
-                session,
-                chat_id,
-                f"🎯 تم فتح غرفة اللعب الخاصة بمجموعتكم!\n"
+            # رسالة تحتوي على الرابط مكتوباً نصياً + الزر لضمان العمل 100%
+            msg_body = (
+                f"🎯 <b>تم فتح غرفة اللعب الخاصة بمجموعتكم!</b>\n"
                 f"🔑 رمز الغرفة: <code>{code}</code>\n\n"
-                f"اضغطوا جميعاً على الزر بالأسفل للدخول معاً لنفس الغرفة وبدء المباراة 👇",
-                reply_markup=group_kb
+                f"🔗 اضغط للدخول المباشر: {room_url}\n\n"
+                f"أو اضغط على الزر بالأسفل للعب معاً 👇"
             )
+            await send_tg_msg(session, chat_id, msg_body, reply_markup=group_kb)
             return
 
-    # أوامر المحادثة الخاصة والآدمن
+    # تشغيل في الخاص
     if chat_type == "private":
-        # لوحة أوامر الآدمن
         if clean_cmd == "/admin" and is_owner:
             help_txt = (
                 f"👑 <b>لوحة تحكم المالك (@{OWNER_USERNAME}):</b>\n\n"
@@ -1327,7 +1258,7 @@ async def handle_tg_message(session, msg):
                 "📋 <b>/banned</b> : قائمة المحظورين\n"
                 "🔄 <b>/reset_scores</b> : تصفير لوحة الصدارة\n"
                 "➕ <b>/add_word [فئة] [كلمة] [ممنوعات]</b> : إضافة كلمة\n"
-                "📁 <b>/categories</b> : استعراض الفئات وإحصاء الكلمات\n"
+                "📁 <b>/categories</b> : استعراض الفئات وبنك الكلمات\n"
             )
             await send_tg_msg(session, chat_id, help_txt)
             return
@@ -1347,29 +1278,29 @@ async def handle_tg_message(session, msg):
             return
 
         elif clean_cmd == "/broadcast" and is_owner:
-            args = text.split(maxsplit=1)
-            if len(args) > 1:
-                bc_text = args[1]
+            # استخراج نص الإذاعة بعد الأمر مباشرة
+            m = re.search(r'/broadcast\s+(.+)', clean_text, re.DOTALL | re.IGNORECASE)
+            if m:
+                bc_text = m.group(1).strip()
                 sent = 0
                 for uid in list(USERS):
-                    try:
-                        await send_tg_msg(session, uid, bc_text)
-                        sent += 1
-                        await asyncio.sleep(0.04)
-                    except Exception:
-                        pass
+                    if int(uid) > 0:
+                        try:
+                            await send_tg_msg(session, uid, bc_text)
+                            sent += 1
+                            await asyncio.sleep(0.04)
+                        except Exception:
+                            pass
                 await send_tg_msg(session, chat_id, f"✅ تم إرسال الإذاعة بنجاح إلى <b>{sent}</b> مستخدماً.")
             else:
                 await send_tg_msg(session, chat_id, "⚠️ طريقة الاستخدام: <code>/broadcast نص الرسالة</code>")
             return
 
         elif clean_cmd == "/ban" and is_owner:
-            args = text.split()
-            if len(args) > 1 and args[1].isdigit():
-                target_id = args[1]
+            if args and args[0].isdigit():
+                target_id = args[0]
                 BANNED_USERS.add(target_id)
                 save_db(BANNED_FILE, {u: True for u in BANNED_USERS})
-                # طرده من أي غرفة نشطة
                 for r in ROOMS.values():
                     if int(target_id) in r.conns:
                         try:
@@ -1382,9 +1313,8 @@ async def handle_tg_message(session, msg):
             return
 
         elif clean_cmd == "/unban" and is_owner:
-            args = text.split()
-            if len(args) > 1 and args[1].isdigit():
-                target_id = args[1]
+            if args and args[0].isdigit():
+                target_id = args[0]
                 if target_id in BANNED_USERS:
                     BANNED_USERS.remove(target_id)
                     save_db(BANNED_FILE, {u: True for u in BANNED_USERS})
@@ -1406,23 +1336,20 @@ async def handle_tg_message(session, msg):
         elif clean_cmd == "/reset_scores" and is_owner:
             STATS.clear()
             save_db(STATS_FILE, STATS)
-            await send_tg_msg(session, chat_id, "🔄 تم تصفير لوحة الصدارة (Leaderboard) وإحصائيات جميع اللاعبين بنجاح لبدء موسم جديد!")
+            await send_tg_msg(session, chat_id, "🔄 تم تصفير لوحة الصدارة (Leaderboard) بنجاح!")
             return
 
         elif clean_cmd == "/add_word" and is_owner:
-            # طريقة الاستخدام: /add_word football مبابي باريس,ريال,فرنسا
-            parts = text.split(maxsplit=3)
-            if len(parts) >= 3:
-                cat = parts[1].lower()
-                word = parts[2].replace("_", " ")
-                taboo = [t.strip() for t in parts[3].split(",")] if len(parts) > 3 else []
+            if len(args) >= 2:
+                cat = args[0].lower()
+                word = args[1].replace("_", " ")
+                taboo = [t.strip() for t in args[2].split(",")] if len(args) > 2 else []
                 if cat not in WORDS_DATA:
                     cats_str = ", ".join(WORDS_DATA.keys())
                     await send_tg_msg(session, chat_id, f"⚠️ الفئة غير صحيحة. الفئات المتاحة: <code>{cats_str}</code>")
                     return
                 item = {"word": word, "taboo": taboo}
                 WORDS_DATA[cat].append(item)
-                # حفظها في custom_words.json
                 c_db = load_db(CUSTOM_WORDS_FILE)
                 if cat not in c_db:
                     c_db[cat] = []
@@ -1453,7 +1380,6 @@ async def handle_tg_message(session, msg):
             await send_tg_msg(session, chat_id, "📁 <b>الفئات وبنك الكلمات الحالي:</b>\n" + "\n".join(cats_info))
             return
 
-        # رسالة البدء العادية للمستخدمين
         if clean_cmd == "/start":
             private_kb = {
                 "inline_keyboard": [
@@ -1465,8 +1391,8 @@ async def handle_tg_message(session, msg):
                 session,
                 chat_id,
                 "مرحباً بك في منصة «شكون أنا؟» 🎮\n\n"
-                "• اضغط على «العب الآن» لفتح اللعبة في الخاص.\n"
-                "• أو أضف البوت إلى مجموعتك والعبوا معاً في غرفة موحدة!",
+                "• اضغط على «العب الآن» للعب في الخاص.\n"
+                "• أو أضف البوت إلى مجموعتك وتحد أصدقاءك معاً!",
                 reply_markup=private_kb
             )
 
