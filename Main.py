@@ -1,6 +1,6 @@
 """
 شكون أنا؟ - Who Am I?
-نسخة تدعم المجموعات (Groups) والمحادثات الخاصة بالكامل.
+النسخة الشاملة مع لوحة تحكم كاملة للآدمن، دعم المجموعات، ونظام الحظر وإدارة الكلمات.
 المتطلبات: pip install aiohttp
 """
 import asyncio
@@ -26,15 +26,16 @@ PORT = int(os.getenv("PORT", "8080"))
 
 STATS_FILE = Path(__file__).parent / "stats.json"
 USERS_FILE = Path(__file__).parent / "users.json"
+BANNED_FILE = Path(__file__).parent / "banned.json"
+CUSTOM_WORDS_FILE = Path(__file__).parent / "custom_words.json"
 
 ROUNDS = (3, 5, 8, 10)
 TIMERS = (30, 45, 60, 90)
 MAX_PLAYERS = 12
 
-# ربط كل مجموعة بغرفتها النشطة
 GROUP_ROOMS = {}
 
-# بنك الكلمات مع الكلمات المحظورة لنمط Taboo
+# بنك الكلمات الأساسي
 WORDS_DATA = {
     "celebs": [
         {"word": "الشاب خالد", "taboo": ["دي دي", "مغني", "وهران"]},
@@ -94,8 +95,15 @@ def save_db(path, data):
     except Exception:
         pass
 
+# دمج الكلمات المضافة من الآدمن
+custom_words = load_db(CUSTOM_WORDS_FILE)
+for cat, items in custom_words.items():
+    if cat in WORDS_DATA and isinstance(items, list):
+        WORDS_DATA[cat].extend(items)
+
 STATS = load_db(STATS_FILE)
 USERS = set(load_db(USERS_FILE).keys())
+BANNED_USERS = set(load_db(BANNED_FILE).keys())
 
 def update_user_stats(uid, name, add_score=0, won=False):
     s_uid = str(uid)
@@ -341,7 +349,6 @@ canvas#confettiCanvas { position: fixed; inset: 0; width: 100%; height: 100%; po
       <div style="font-weight: 700; color: var(--text-muted);" id="roleText">...</div>
       <div style="font-size: 26px; font-weight: 900; color: var(--gold); margin: 6px 0;" id="targetWord">...</div>
       
-      <!-- الكلمات الممنوعة إن وجدت -->
       <div id="tabooBox" class="hidden" style="margin-top: 6px;">
         <div style="font-size: 11px; color: var(--danger); font-weight: 800; margin-bottom: 4px;">ممنوع استخدام هذه الكلمات في التلميح:</div>
         <div id="tabooWordsList"></div>
@@ -371,7 +378,6 @@ canvas#confettiCanvas { position: fixed; inset: 0; width: 100%; height: 100%; po
       <div class="card" style="margin: 0;"><div class="card-title">المحاولات</div><div id="guessesFeed" style="max-height: 140px; overflow-y: auto;"></div></div>
     </div>
 
-    <!-- التفاعلات الحية العائمة -->
     <div class="reactions-bar">
       <button class="react-btn" onclick="sendReaction('👏')">👏</button>
       <button class="react-btn" onclick="sendReaction('🔥')">🔥</button>
@@ -410,7 +416,7 @@ canvas#confettiCanvas { position: fixed; inset: 0; width: 100%; height: 100%; po
   <div class="modal-overlay hidden" id="profileModal">
     <div class="modal-box">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
-        <h3 style="display:flex; align-items:center; gap:8px;"><svg class="ic"><use href="#i-user"/></svg><span>الملف الشخصي والرتبة</span></h3>
+        <h3 style="display:flex; align-items:center; gap:8px;"><svg class="ic" style="color:var(--primary-light);"><use href="#i-user"/></svg><span>الملف الشخصي والرتبة</span></h3>
         <button class="icon-btn" id="closeProfileBtn"><svg class="ic"><use href="#i-close"/></svg></button>
       </div>
       <div style="text-align: center; padding: 6px 0 12px;">
@@ -435,8 +441,6 @@ try { tg?.ready(); tg?.expand(); } catch (_) {}
 const $ = id => document.getElementById(id);
 const VIEWS = ['homeView', 'lobbyView', 'gameView', 'endView'];
 let ws = null, me = null, state = null, timerInterval = null;
-
-// قراءة رمز الغرفة تلقائياً (من الرابط أو من معلمات المجموعات)
 let currentRoomCode = new URLSearchParams(location.search).get('room')?.toUpperCase() || tg?.initDataUnsafe?.start_param?.toUpperCase() || null;
 
 const CATEGORIES = {
@@ -538,7 +542,6 @@ function connectServer() {
   };
 }
 
-// حزام أمان ذكي ضد التعليق
 setTimeout(() => {
   if (!me) {
     me = tg?.initDataUnsafe?.user || { id: Math.floor(100000 + Math.random()*900000), first_name: "لاعب" };
@@ -1173,7 +1176,15 @@ async def ws_handler(request):
                     rnd_id = random.randint(100000, 999999)
                     user = {"id": rnd_id, "name": f"لاعب {str(rnd_id)[-3:]}"}
 
-                uid, name = user["id"], user["name"]
+                uid = user["id"]
+                name = user["name"]
+
+                # فحص الحظر (Ban Check)
+                if str(uid) in BANNED_USERS:
+                    await send(ws, err("❌ تم حظرك من اللعبة من قبل الإدارة."))
+                    await ws.close()
+                    return ws
+
                 s = STATS.get(str(uid), {"score": 0, "wins": 0, "games": 0})
                 user["stats"] = s
                 await send(ws, {"type": "authed", "user": user})
@@ -1236,11 +1247,11 @@ async def cleanup():
 async def index(_):
     return web.Response(text=HTML_PAGE, content_type="text/html", charset="utf-8")
 
-# --- نظام البوت التفاعلي في المجموعات والمحادثات الخاصة ---
+# --- نظام بوت التيليجرام ولوحة تحكم الآدمن المتقدمة ---
 async def send_tg_msg(session, chat_id, text, reply_markup=None):
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        payload = {"chat_id": chat_id, "text": text}
+        payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
         if reply_markup:
             payload["reply_markup"] = reply_markup
         await session.post(url, json=payload)
@@ -1258,14 +1269,13 @@ async def handle_tg_message(session, msg):
     if not chat_id:
         return
 
-    # حفظ المستخدمين للإذاعة
     if user_id:
         USERS.add(user_id)
         save_db(USERS_FILE, {str(u): True for u in USERS})
 
     is_owner = (user_id == OWNER_ID) or (username == OWNER_USERNAME.lower())
 
-    # ترحيب عند إضافة البوت إلى مجموعة جديدة
+    # ترحيب بالمجموعات
     if "new_chat_members" in msg:
         for m in msg["new_chat_members"]:
             if m.get("is_bot") and m.get("username", "").lower() == "chkonanabot":
@@ -1277,13 +1287,11 @@ async def handle_tg_message(session, msg):
                 )
                 return
 
-    # تنظيف الأمر من اسم البوت (مثلاً /play@chkonanabot -> /play)
     clean_cmd = text.split("@")[0].lower() if text.startswith("/") else ""
 
-    # تشغيل اللعبة في المجموعات (Groups & Supergroups)
+    # تشغيل في المجموعات
     if chat_type in ("group", "supergroup"):
         if clean_cmd in ("/start", "/play", "/game"):
-            # البحث عن غرفة سابقة للمجموعة أو إنشاء واحدة جديدة
             code = GROUP_ROOMS.get(chat_id)
             if not code or code not in ROOMS or ROOMS[code].status == "ended":
                 code = new_code()
@@ -1306,8 +1314,146 @@ async def handle_tg_message(session, msg):
             )
             return
 
-    # تشغيل اللعبة في الخاص (Private Chat)
+    # أوامر المحادثة الخاصة والآدمن
     if chat_type == "private":
+        # لوحة أوامر الآدمن
+        if clean_cmd == "/admin" and is_owner:
+            help_txt = (
+                f"👑 <b>لوحة تحكم المالك (@{OWNER_USERNAME}):</b>\n\n"
+                "📊 <b>/stats</b> : إحصائيات المنصة واللاعبين\n"
+                "📢 <b>/broadcast [نص]</b> : إذاعة لجميع المستخدمين\n"
+                "🚫 <b>/ban [ID]</b> : حظر لاعب من الدخول\n"
+                "✅ <b>/unban [ID]</b> : إلغاء حظر لاعب\n"
+                "📋 <b>/banned</b> : قائمة المحظورين\n"
+                "🔄 <b>/reset_scores</b> : تصفير لوحة الصدارة\n"
+                "➕ <b>/add_word [فئة] [كلمة] [ممنوعات]</b> : إضافة كلمة\n"
+                "📁 <b>/categories</b> : استعراض الفئات وإحصاء الكلمات\n"
+            )
+            await send_tg_msg(session, chat_id, help_txt)
+            return
+
+        elif clean_cmd == "/stats" and is_owner:
+            total_words = sum(len(items) for items in WORDS_DATA.values())
+            await send_tg_msg(
+                session,
+                chat_id,
+                f"👑 <b>إحصائيات المنصة المباشرة:</b>\n\n"
+                f"👥 إجمالي المستخدمين: <b>{len(USERS)}</b>\n"
+                f"🏆 المسجلون بالليدربورد: <b>{len(STATS)}</b>\n"
+                f"🎮 الغرف النشطة الآن: <b>{len(ROOMS)}</b>\n"
+                f"📚 بنك الكلمات الكلي: <b>{total_words} كلمة</b>\n"
+                f"🚫 اللاعبون المحظورون: <b>{len(BANNED_USERS)}</b>"
+            )
+            return
+
+        elif clean_cmd == "/broadcast" and is_owner:
+            args = text.split(maxsplit=1)
+            if len(args) > 1:
+                bc_text = args[1]
+                sent = 0
+                for uid in list(USERS):
+                    try:
+                        await send_tg_msg(session, uid, bc_text)
+                        sent += 1
+                        await asyncio.sleep(0.04)
+                    except Exception:
+                        pass
+                await send_tg_msg(session, chat_id, f"✅ تم إرسال الإذاعة بنجاح إلى <b>{sent}</b> مستخدماً.")
+            else:
+                await send_tg_msg(session, chat_id, "⚠️ طريقة الاستخدام: <code>/broadcast نص الرسالة</code>")
+            return
+
+        elif clean_cmd == "/ban" and is_owner:
+            args = text.split()
+            if len(args) > 1 and args[1].isdigit():
+                target_id = args[1]
+                BANNED_USERS.add(target_id)
+                save_db(BANNED_FILE, {u: True for u in BANNED_USERS})
+                # طرده من أي غرفة نشطة
+                for r in ROOMS.values():
+                    if int(target_id) in r.conns:
+                        try:
+                            await r.conns[int(target_id)].close()
+                        except Exception:
+                            pass
+                await send_tg_msg(session, chat_id, f"🚫 تم حظر المستخدم <code>{target_id}</code> وطرده من اللعبة بنجاح.")
+            else:
+                await send_tg_msg(session, chat_id, "⚠️ طريقة الاستخدام: <code>/ban 123456789</code>")
+            return
+
+        elif clean_cmd == "/unban" and is_owner:
+            args = text.split()
+            if len(args) > 1 and args[1].isdigit():
+                target_id = args[1]
+                if target_id in BANNED_USERS:
+                    BANNED_USERS.remove(target_id)
+                    save_db(BANNED_FILE, {u: True for u in BANNED_USERS})
+                    await send_tg_msg(session, chat_id, f"✅ تم إلغاء حظر المستخدم <code>{target_id}</code> بنجاح.")
+                else:
+                    await send_tg_msg(session, chat_id, "⚠️ هذا المستخدم غير موجود في قائمة الحظر.")
+            else:
+                await send_tg_msg(session, chat_id, "⚠️ طريقة الاستخدام: <code>/unban 123456789</code>")
+            return
+
+        elif clean_cmd == "/banned" and is_owner:
+            if not BANNED_USERS:
+                await send_tg_msg(session, chat_id, "📋 لا يوجد أي مستخدم محظور حالياً.")
+            else:
+                b_list = "\n".join(f"• <code>{u}</code>" for u in BANNED_USERS)
+                await send_tg_msg(session, chat_id, f"🚫 <b>قائمة المحظورين ({len(BANNED_USERS)}):</b>\n{b_list}")
+            return
+
+        elif clean_cmd == "/reset_scores" and is_owner:
+            STATS.clear()
+            save_db(STATS_FILE, STATS)
+            await send_tg_msg(session, chat_id, "🔄 تم تصفير لوحة الصدارة (Leaderboard) وإحصائيات جميع اللاعبين بنجاح لبدء موسم جديد!")
+            return
+
+        elif clean_cmd == "/add_word" and is_owner:
+            # طريقة الاستخدام: /add_word football مبابي باريس,ريال,فرنسا
+            parts = text.split(maxsplit=3)
+            if len(parts) >= 3:
+                cat = parts[1].lower()
+                word = parts[2].replace("_", " ")
+                taboo = [t.strip() for t in parts[3].split(",")] if len(parts) > 3 else []
+                if cat not in WORDS_DATA:
+                    cats_str = ", ".join(WORDS_DATA.keys())
+                    await send_tg_msg(session, chat_id, f"⚠️ الفئة غير صحيحة. الفئات المتاحة: <code>{cats_str}</code>")
+                    return
+                item = {"word": word, "taboo": taboo}
+                WORDS_DATA[cat].append(item)
+                # حفظها في custom_words.json
+                c_db = load_db(CUSTOM_WORDS_FILE)
+                if cat not in c_db:
+                    c_db[cat] = []
+                c_db[cat].append(item)
+                save_db(CUSTOM_WORDS_FILE, c_db)
+                taboo_str = ", ".join(taboo) if taboo else "لا توجد"
+                await send_tg_msg(
+                    session,
+                    chat_id,
+                    f"✅ <b>تمت إضافة الكلمة بنجاح!</b>\n"
+                    f"• الفئة: <code>{cat}</code>\n"
+                    f"• الكلمة: <b>{word}</b>\n"
+                    f"• الكلمات الممنوعة: <i>{taboo_str}</i>"
+                )
+            else:
+                await send_tg_msg(
+                    session,
+                    chat_id,
+                    "⚠️ <b>طريقة إضافة كلمة:</b>\n"
+                    "<code>/add_word الفئة الكلمة كلمة1,كلمة2,كلمة3</code>\n\n"
+                    "مثال:\n"
+                    "<code>/add_word football مبابي باريس,ريال,فرنسا</code>"
+                )
+            return
+
+        elif clean_cmd == "/categories" and is_owner:
+            cats_info = [f"• <b>{k}</b>: {len(v)} كلمة" for k, v in WORDS_DATA.items()]
+            await send_tg_msg(session, chat_id, "📁 <b>الفئات وبنك الكلمات الحالي:</b>\n" + "\n".join(cats_info))
+            return
+
+        # رسالة البدء العادية للمستخدمين
         if clean_cmd == "/start":
             private_kb = {
                 "inline_keyboard": [
@@ -1323,28 +1469,6 @@ async def handle_tg_message(session, msg):
                 "• أو أضف البوت إلى مجموعتك والعبوا معاً في غرفة موحدة!",
                 reply_markup=private_kb
             )
-        elif clean_cmd == "/stats" and is_owner:
-            await send_tg_msg(
-                session,
-                chat_id,
-                f"👑 إحصائيات المالك ({OWNER_USERNAME}):\n"
-                f"- إجمالي اللاعبين المسجلين: {len(STATS)}\n"
-                f"- الغرف النشطة الآن: {len(ROOMS)}\n"
-                f"- مستخدمو البوت: {len(USERS)}"
-            )
-        elif clean_cmd == "/broadcast" and is_owner:
-            args = text.split(maxsplit=1)
-            if len(args) > 1:
-                bc_text = args[1]
-                sent = 0
-                for uid in list(USERS):
-                    try:
-                        await send_tg_msg(session, uid, bc_text)
-                        sent += 1
-                        await asyncio.sleep(0.04)
-                    except Exception:
-                        pass
-                await send_tg_msg(session, chat_id, f"تم إرسال الإذاعة إلى {sent} مستخدماً.")
 
 async def bot_polling():
     offset = 0
