@@ -1,6 +1,7 @@
 """
-شكون أنا؟ - النسخة الشاملة مع جميع الأنماط والميزات الجديدة
-ملف واحد مستقل يعمل عبر aiohttp بدون أي مكتبات إضافية.
+شكون أنا؟ - Who Am I?
+نسخة تدعم المجموعات (Groups) والمحادثات الخاصة بالكامل.
+المتطلبات: pip install aiohttp
 """
 import asyncio
 import hashlib
@@ -16,6 +17,7 @@ from urllib.parse import parse_qsl, unquote
 import aiohttp
 from aiohttp import WSMsgType, web
 
+# --- بيانات البوت والمالك ---
 BOT_TOKEN = os.getenv("BOT_TOKEN", "9269122102:AAFxKUbT6Bw4_lIfLWVenBDTWQ1M9_fGzMA")
 APP_URL = "https://chkon-ana.onrender.com/"
 OWNER_USERNAME = "IIlIlIlllIIllIIl"
@@ -28,6 +30,9 @@ USERS_FILE = Path(__file__).parent / "users.json"
 ROUNDS = (3, 5, 8, 10)
 TIMERS = (30, 45, 60, 90)
 MAX_PLAYERS = 12
+
+# ربط كل مجموعة بغرفتها النشطة
+GROUP_ROOMS = {}
 
 # بنك الكلمات مع الكلمات المحظورة لنمط Taboo
 WORDS_DATA = {
@@ -121,7 +126,7 @@ def get_leaderboard_data():
         for idx, (uid, p) in enumerate(sorted_players)
     ]
 
-# --- كود الواجهة الكامل مع كافة الأنماط والتفاعلات ---
+# --- واجهة المستخدم الكاملة ---
 HTML_PAGE = """<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -235,8 +240,8 @@ canvas#confettiCanvas { position: fixed; inset: 0; width: 100%; height: 100%; po
   <header class="top-nav">
     <div class="brand-badge"><svg class="ic"><use href="#i-logo"/></svg></div>
     <div style="margin-inline-start: 8px;">
-      <h1 data-i18n="app_title">شكون أنا؟</h1>
-      <p data-i18n="app_sub" style="font-size: 11px; color: var(--text-muted);">التحدي والمرح الجماعي</p>
+      <h1>شكون أنا؟</h1>
+      <p style="font-size: 11px; color: var(--text-muted);">التحدي والمرح الجماعي</p>
     </div>
     <div class="grow"></div>
     <div class="nav-actions">
@@ -345,7 +350,6 @@ canvas#confettiCanvas { position: fixed; inset: 0; width: 100%; height: 100%; po
       <div id="resultBanner" class="hidden" style="font-weight: 800; margin-top: 8px;"></div>
     </div>
 
-    <!-- صندوق التلميح -->
     <div class="card hidden" id="clueCard">
       <div class="card-title"><svg class="ic"><use href="#i-bulb"/></svg><span>اكتب تلميحاً ذكياً</span></div>
       <div class="row">
@@ -354,7 +358,6 @@ canvas#confettiCanvas { position: fixed; inset: 0; width: 100%; height: 100%; po
       </div>
     </div>
 
-    <!-- صندوق التخمين -->
     <div class="card hidden" id="guessCard">
       <div class="card-title"><svg class="ic"><use href="#i-target"/></svg><span>اكتب تخمينك للكلمة</span></div>
       <div class="row">
@@ -363,7 +366,6 @@ canvas#confettiCanvas { position: fixed; inset: 0; width: 100%; height: 100%; po
       </div>
     </div>
 
-    <!-- التلميحات والمحاولات -->
     <div class="row" style="margin-bottom: 10px;">
       <div class="card" style="margin: 0;"><div class="card-title">التلميحات</div><div id="cluesFeed" style="max-height: 140px; overflow-y: auto;"></div></div>
       <div class="card" style="margin: 0;"><div class="card-title">المحاولات</div><div id="guessesFeed" style="max-height: 140px; overflow-y: auto;"></div></div>
@@ -433,7 +435,9 @@ try { tg?.ready(); tg?.expand(); } catch (_) {}
 const $ = id => document.getElementById(id);
 const VIEWS = ['homeView', 'lobbyView', 'gameView', 'endView'];
 let ws = null, me = null, state = null, timerInterval = null;
-let currentRoomCode = new URLSearchParams(location.search).get('room')?.toUpperCase() || null;
+
+// قراءة رمز الغرفة تلقائياً (من الرابط أو من معلمات المجموعات)
+let currentRoomCode = new URLSearchParams(location.search).get('room')?.toUpperCase() || tg?.initDataUnsafe?.start_param?.toUpperCase() || null;
 
 const CATEGORIES = {
   celebs: 'مشاهير وثقافة',
@@ -534,7 +538,7 @@ function connectServer() {
   };
 }
 
-// حزام أمان ذكي: يمنع الشاشة من التعليق أبداً
+// حزام أمان ذكي ضد التعليق
 setTimeout(() => {
   if (!me) {
     me = tg?.initDataUnsafe?.user || { id: Math.floor(100000 + Math.random()*900000), first_name: "لاعب" };
@@ -634,7 +638,6 @@ function render() {
       $('targetWord').textContent = r.word || 'ـ ـ ـ ـ ـ ـ';
     }
 
-    // عرض الكلمات الممنوعة للمساعدين في نمط Taboo
     if (mode === 'taboo' && !isGuesser && r.taboo && r.taboo.length) {
       $('tabooBox').classList.remove('hidden');
       $('tabooWordsList').innerHTML = r.taboo.map(w => `<span class="taboo-tag">${w}</span>`).join('');
@@ -1233,6 +1236,7 @@ async def cleanup():
 async def index(_):
     return web.Response(text=HTML_PAGE, content_type="text/html", charset="utf-8")
 
+# --- نظام البوت التفاعلي في المجموعات والمحادثات الخاصة ---
 async def send_tg_msg(session, chat_id, text, reply_markup=None):
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -1243,62 +1247,104 @@ async def send_tg_msg(session, chat_id, text, reply_markup=None):
     except Exception:
         pass
 
-def get_play_keyboard():
-    return {
-        "inline_keyboard": [
-            [
-                {
-                    "text": "🎮 العب الآن • Play Game",
-                    "web_app": {"url": APP_URL}
-                }
-            ]
-        ]
-    }
-
 async def handle_tg_message(session, msg):
-    chat_id = msg.get("chat", {}).get("id")
-    user_id = msg.get("from", {}).get("id")
-    username = (msg.get("from", {}).get("username") or "").lower()
+    chat = msg.get("chat", {})
+    chat_id = chat.get("id")
+    chat_type = chat.get("type", "private")
+    user = msg.get("from", {})
+    user_id = user.get("id")
+    username = (user.get("username") or "").lower()
     text = (msg.get("text") or "").strip()
     if not chat_id:
         return
 
+    # حفظ المستخدمين للإذاعة
     if user_id:
         USERS.add(user_id)
         save_db(USERS_FILE, {str(u): True for u in USERS})
 
     is_owner = (user_id == OWNER_ID) or (username == OWNER_USERNAME.lower())
 
-    if text.startswith("/start"):
-        await send_tg_msg(
-            session,
-            chat_id,
-            "مرحباً بك في منصة «شكون أنا؟» 🎮\n\n"
-            "اضغط على الزر الشفاف بالأسفل لبدء التحدي واللعب مباشرة مع أصدقائك!",
-            reply_markup=get_play_keyboard()
-        )
-    elif text.startswith("/stats") and is_owner:
-        await send_tg_msg(
-            session,
-            chat_id,
-            f"👑 إحصائيات المالك ({OWNER_USERNAME}):\n"
-            f"- إجمالي اللاعبين المسجلين: {len(STATS)}\n"
-            f"- الغرف النشطة الآن: {len(ROOMS)}\n"
-            f"- إجمالي مستخدمي البوت: {len(USERS)}"
-        )
-    elif text.startswith("/broadcast") and is_owner:
-        args = text.split(maxsplit=1)
-        if len(args) > 1:
-            bc_text = args[1]
-            sent = 0
-            for uid in list(USERS):
-                try:
-                    await send_tg_msg(session, uid, bc_text)
-                    sent += 1
-                    await asyncio.sleep(0.04)
-                except Exception:
-                    pass
-            await send_tg_msg(session, chat_id, f"تم إرسال الإذاعة إلى {sent} مستخدماً.")
+    # ترحيب عند إضافة البوت إلى مجموعة جديدة
+    if "new_chat_members" in msg:
+        for m in msg["new_chat_members"]:
+            if m.get("is_bot") and m.get("username", "").lower() == "chkonanabot":
+                await send_tg_msg(
+                    session,
+                    chat_id,
+                    "👋 مرحباً بكم في لعبة «شكون أنا؟» في مجموعتكم! 🎮\n\n"
+                    "اكتبوا الأمر /play لبدء مباراة وتحدي بين أعضاء المجموعة فوراً!"
+                )
+                return
+
+    # تنظيف الأمر من اسم البوت (مثلاً /play@chkonanabot -> /play)
+    clean_cmd = text.split("@")[0].lower() if text.startswith("/") else ""
+
+    # تشغيل اللعبة في المجموعات (Groups & Supergroups)
+    if chat_type in ("group", "supergroup"):
+        if clean_cmd in ("/start", "/play", "/game"):
+            # البحث عن غرفة سابقة للمجموعة أو إنشاء واحدة جديدة
+            code = GROUP_ROOMS.get(chat_id)
+            if not code or code not in ROOMS or ROOMS[code].status == "ended":
+                code = new_code()
+                ROOMS[code] = Room(code, user_id)
+                GROUP_ROOMS[chat_id] = code
+
+            url = f"{APP_URL}?room={code}"
+            group_kb = {
+                "inline_keyboard": [
+                    [{"text": "🎮 دخول غرفة المجموعة • Join Game", "web_app": {"url": url}}]
+                ]
+            }
+            await send_tg_msg(
+                session,
+                chat_id,
+                f"🎯 تم فتح غرفة اللعب الخاصة بمجموعتكم!\n"
+                f"🔑 رمز الغرفة: <code>{code}</code>\n\n"
+                f"اضغطوا جميعاً على الزر بالأسفل للدخول معاً لنفس الغرفة وبدء المباراة 👇",
+                reply_markup=group_kb
+            )
+            return
+
+    # تشغيل اللعبة في الخاص (Private Chat)
+    if chat_type == "private":
+        if clean_cmd == "/start":
+            private_kb = {
+                "inline_keyboard": [
+                    [{"text": "🎮 العب الآن • Play", "web_app": {"url": APP_URL}}],
+                    [{"text": "➕ أضف البوت لمجموعتك", "url": "https://t.me/chkonanabot?startgroup=true"}]
+                ]
+            }
+            await send_tg_msg(
+                session,
+                chat_id,
+                "مرحباً بك في منصة «شكون أنا؟» 🎮\n\n"
+                "• اضغط على «العب الآن» لفتح اللعبة في الخاص.\n"
+                "• أو أضف البوت إلى مجموعتك والعبوا معاً في غرفة موحدة!",
+                reply_markup=private_kb
+            )
+        elif clean_cmd == "/stats" and is_owner:
+            await send_tg_msg(
+                session,
+                chat_id,
+                f"👑 إحصائيات المالك ({OWNER_USERNAME}):\n"
+                f"- إجمالي اللاعبين المسجلين: {len(STATS)}\n"
+                f"- الغرف النشطة الآن: {len(ROOMS)}\n"
+                f"- مستخدمو البوت: {len(USERS)}"
+            )
+        elif clean_cmd == "/broadcast" and is_owner:
+            args = text.split(maxsplit=1)
+            if len(args) > 1:
+                bc_text = args[1]
+                sent = 0
+                for uid in list(USERS):
+                    try:
+                        await send_tg_msg(session, uid, bc_text)
+                        sent += 1
+                        await asyncio.sleep(0.04)
+                    except Exception:
+                        pass
+                await send_tg_msg(session, chat_id, f"تم إرسال الإذاعة إلى {sent} مستخدماً.")
 
 async def bot_polling():
     offset = 0
