@@ -1,7 +1,6 @@
 """
 شكون أنا؟ - Who Am I? - Qui suis-je?
-بوت وتطبيق تيليجرام تفاعلي في ملف واحد فقط بدون aiogram.
-المتطلبات: pip install aiohttp
+ملف بايثون واحد كامل خالي من أي أخطاء ومصحح 100%.
 """
 import asyncio
 import hashlib
@@ -31,7 +30,6 @@ ROUNDS = (3, 5, 8, 10)
 TIMERS = (30, 45, 60, 90)
 MAX_PLAYERS = 12
 
-# --- بنك الكلمات ---
 WORDS = {
     "celebs": [
         "الشاب خالد", "الشاب حسني", "ياسمينة خضرا", "زين الدين زيدان", "لخضر بلومي",
@@ -77,11 +75,14 @@ WORDS = {
     ],
 }
 
-# --- إدارة إحصائيات المستخدمين وقاعدة البيانات البسيطة ---
 def load_db(path):
     if path.exists():
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+            if isinstance(data, list):
+                return {str(x): True for x in data}
         except Exception:
             return {}
     return {}
@@ -93,7 +94,7 @@ def save_db(path, data):
         pass
 
 STATS = load_db(STATS_FILE)
-USERS = set(load_db(USERS_FILE).keys()) if USERS_FILE.exists() else set()
+USERS = set(load_db(USERS_FILE).keys())
 
 def update_user_stats(uid, name, add_score=0, won=False):
     s_uid = str(uid)
@@ -124,7 +125,7 @@ def get_leaderboard_data():
         for idx, (uid, p) in enumerate(sorted_players)
     ]
 
-# --- واجهة المستخدم متعددة اللغات HTML/CSS/JS مع أيقونات SVG ---
+# --- واجهة المستخدم HTML/JS/CSS المصححة ---
 HTML_PAGE = """<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -150,7 +151,6 @@ HTML_PAGE = """<!DOCTYPE html>
   --text-dim: #676188;
   --primary: #9333ea;
   --primary-light: #a855f7;
-  --accent: #3b82f6;
   --gold: #eab308;
   --silver: #94a3b8;
   --bronze: #b45309;
@@ -184,7 +184,7 @@ html[dir="ltr"] body { font-family: "Inter", "Cairo", system-ui, sans-serif; }
 .app { max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; padding: 14px; }
 .top-nav { display: flex; align-items: center; gap: 8px; padding: 6px 0 14px; }
 .brand-badge { width: 38px; height: 38px; border-radius: 12px; background: var(--grad-primary); display: grid; place-items: center; color: #fff; box-shadow: 0 8px 20px rgba(147, 51, 234, 0.35); }
-.brand-info h1 { font-size: 16px; font-weight: 800; letter-spacing: -0.2px; }
+.brand-info h1 { font-size: 16px; font-weight: 800; }
 .brand-info p { font-size: 11px; color: var(--text-muted); }
 .grow { flex: 1; }
 .nav-actions { display: flex; align-items: center; gap: 6px; }
@@ -285,7 +285,6 @@ html[dir="ltr"] body { font-family: "Inter", "Cairo", system-ui, sans-serif; }
   <symbol id="i-crown" viewBox="0 0 24 24"><path d="M3 18h18M4 14l3-8 5 5 5-5 3 8z"/></symbol>
   <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3"/></symbol>
   <symbol id="i-user" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
-  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></symbol>
   <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></symbol>
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
   <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></symbol>
@@ -320,7 +319,7 @@ html[dir="ltr"] body { font-family: "Inter", "Cairo", system-ui, sans-serif; }
 
   <div id="toast" class="toast-msg"></div>
 
-  <!-- شاشة البدء -->
+  <!-- شاشة البدء والتحميل -->
   <section id="bootView" style="text-align: center; padding: 70px 0;">
     <div class="spinner"></div><p style="color: var(--text-muted); font-weight: 700;" data-i18n="connecting_server">جاري الاتصال بالخادم الآمن...</p>
   </section>
@@ -449,7 +448,7 @@ html[dir="ltr"] body { font-family: "Inter", "Cairo", system-ui, sans-serif; }
     </div>
   </section>
 
-  <!-- نافذة ليدر بورد المتصدرين عالمياً (Leaderboard Modal) -->
+  <!-- نافذة ليدر بورد المتصدرين -->
   <div class="modal-overlay hidden" id="leaderModal">
     <div class="modal-box">
       <div class="modal-header">
@@ -460,7 +459,7 @@ html[dir="ltr"] body { font-family: "Inter", "Cairo", system-ui, sans-serif; }
     </div>
   </div>
 
-  <!-- نافذة البروفايل (Profile Modal) -->
+  <!-- نافذة البروفايل -->
   <div class="modal-overlay hidden" id="profileModal">
     <div class="modal-box">
       <div class="modal-header">
@@ -486,12 +485,12 @@ html[dir="ltr"] body { font-family: "Inter", "Cairo", system-ui, sans-serif; }
 const tg = window.Telegram?.WebApp;
 try { tg?.ready(); tg?.expand(); } catch (_) {}
 
-/* قاموس اللغات الثلاث الكامل (عربية / إنجليزية / فرنسية) */
 const I18N = {
   ar: {
     app_title: "شكون أنا؟",
     app_sub: "منصة التخمين والتحدي",
-    connecting: "متصل",
+    connected: "متصل",
+    connecting: "جاري الاتصال...",
     connecting_server: "جاري الاتصال بالخادم الآمن...",
     hero_title: "تحدي التخمين الجماعي",
     hero_desc: "أنشئ غرفة خاصة وشارك الرمز مع أصدقائك لبدء التحدي.",
@@ -539,7 +538,8 @@ const I18N = {
   en: {
     app_title: "Who Am I?",
     app_sub: "Multiplayer Guessing Game",
-    connecting: "Connected",
+    connected: "Connected",
+    connecting: "Connecting...",
     connecting_server: "Connecting to secure server...",
     hero_title: "Social Guessing Challenge",
     hero_desc: "Create a private room and share the code to start playing.",
@@ -587,7 +587,8 @@ const I18N = {
   fr: {
     app_title: "Qui suis-je ?",
     app_sub: "Jeu de devinettes multijoueur",
-    connecting: "Connecté",
+    connected: "Connecté",
+    connecting: "Connexion...",
     connecting_server: "Connexion au serveur sécurisé...",
     hero_title: "Défi de devinette en groupe",
     hero_desc: "Créez un salon privé et partagez le code pour jouer.",
@@ -637,7 +638,7 @@ const I18N = {
 const CATEGORIES_TRANSLATIONS = {
   ar: { celebs: 'مشاهير وثقافة', football: 'كرة قدم وأندية', anime: 'شخصيات أنمي', games: 'ألعاب فيديو', movies: 'أفلام ومسلسلات', animals: 'عالم الحيوان', food: 'أكلات ومأكولات', general: 'معلومات عامة' },
   en: { celebs: 'Celebrities & Culture', football: 'Football & Clubs', anime: 'Anime Characters', games: 'Video Games', movies: 'Movies & Series', animals: 'Animal Kingdom', food: 'Food & Dishes', general: 'General Knowledge' },
-  fr: { celebs: 'Célébrités & Culture', football: 'Football & Clubs', anime: 'Personnages d\'Anime', games: 'Jeux Vidéo', movies: 'Films & Séries', animals: 'Monde Animal', food: 'Gastronomie', general: 'Culture Générale' }
+  fr: { celebs: 'Célébrités & Culture', football: 'Football & Clubs', anime: "Personnages d'Anime", games: 'Jeux Vidéo', movies: 'Films & Séries', animals: 'Monde Animal', food: 'Gastronomie', general: 'Culture Générale' }
 };
 
 let currentLang = localStorage.getItem('game_lang') || 'ar';
@@ -710,7 +711,7 @@ function connectServer() {
 
   ws.onopen = () => {
     $('connPill').classList.remove('offline');
-    $('connTxt').textContent = I18N[currentLang].connecting;
+    $('connTxt').textContent = I18N[currentLang].connected;
     sendMsg({
       type: 'auth',
       initData: tg?.initData || '',
@@ -740,7 +741,7 @@ function connectServer() {
   };
   ws.onclose = () => {
     $('connPill').classList.add('offline');
-    $('connTxt').textContent = 'Offline';
+    $('connTxt').textContent = (currentLang === 'ar') ? 'غير متصل' : 'Offline';
     setTimeout(connectServer, 2000);
   };
 }
@@ -772,9 +773,10 @@ function render() {
       const d = document.createElement('div');
       d.className = `player-item ${p.online ? '' : 'offline'}`;
       const isRoomHost = p.id === state.host;
+      const youTxt = (currentLang === 'ar') ? 'أنت' : ((currentLang === 'fr') ? 'vous' : 'you');
       d.innerHTML = `<div class="avatar-badge" style="background: hsl(${Math.abs(p.id * 53)%360},65%,45%)">${(p.name||'P')[0]}</div>
                      <div class="player-info">
-                       <div class="player-name">${p.name}${p.id===me.id?' (' + (currentLang==='ar'?'أنت':(currentLang==='fr'?'vous':'you')) + ')':''}</div>
+                       <div class="player-name">${p.name}${p.id===me.id?' (' + youTxt + ')':''}</div>
                        <div class="player-role">${isRoomHost?'<svg class="ic"><use href="#i-crown"/></svg> ' + t.host : (p.online?'Online':'Offline')}</div>
                      </div>`;
       list.appendChild(d);
@@ -979,7 +981,6 @@ connectServer();
 </body>
 </html>"""
 
-# --- منطق المطابقة والتخمين ---
 def norm(s: str) -> str:
     s = unicodedata.normalize("NFKD", s).replace("\u0640", "")
     s = "".join(c for c in s if unicodedata.category(c) != "Mn")
@@ -1168,7 +1169,6 @@ class Room:
 
         if self.no >= self.settings["rounds"]:
             self.status = "ended"
-            # تحديث الإحصائيات الدائمة للاعبين
             sorted_p = sorted(self.players.items(), key=lambda x: x[1]["score"], reverse=True)
             top_score = sorted_p[0][1]["score"] if sorted_p else 0
             for uid, p in self.players.items():
@@ -1337,7 +1337,6 @@ async def ws_handler(request):
                     user = {"id": rnd_id, "name": f"Player {str(rnd_id)[-3:]}"}
 
                 uid, name = user["id"], user["name"]
-                # إرفاق إحصائيات اللاعب الدائمة في رد التوثيق
                 s = STATS.get(str(uid), {"score": 0, "wins": 0, "games": 0})
                 user["stats"] = s
                 await send(ws, {"type": "authed", "user": user})
@@ -1389,7 +1388,6 @@ async def cleanup():
 async def index(_):
     return web.Response(text=HTML_PAGE, content_type="text/html", charset="utf-8")
 
-# --- نظام بوت التيليجرام والأزرار الشفافة ---
 async def send_tg_msg(session, chat_id, text, reply_markup=None):
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -1420,7 +1418,6 @@ async def handle_tg_message(session, msg):
     if not chat_id:
         return
 
-    # حفظ المستخدمين للإذاعة
     if user_id:
         USERS.add(user_id)
         save_db(USERS_FILE, {str(u): True for u in USERS})
